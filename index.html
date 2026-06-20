@@ -1067,7 +1067,7 @@ function renderizarEtapaPagamento(){
       document.getElementById("inputTroco").oninput = (e) => { pedido.trocoPara = e.target.value; };
     } else if(pedido.formaPagamento === "pix"){
       campoExtra.innerHTML = `
-        <div class="pix-card">
+        <div class="pix-card" id="pixCard">
           <div class="pix-card-titulo">💠 Chave Pix para pagamento</div>
           <div class="pix-card-nome">${NOME_PIX}</div>
           <div class="pix-card-chave">
@@ -1086,6 +1086,9 @@ function renderizarEtapaPagamento(){
           }, 2000);
         });
       };
+      setTimeout(() => {
+        document.getElementById("pixCard").scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 50);
     } else {
       campoExtra.innerHTML = "";
     }
