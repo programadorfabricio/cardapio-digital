@@ -1,0 +1,1235 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Brasa & Cia — Cardápio Digital</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+
+/* ============================================
+   CONFIGURAÇÃO RÁPIDA — troque aqui pra outro cliente
+   ============================================ */
+:root{
+  --cor-fundo: #1A1410;
+  --cor-fundo-alt: #221A14;
+  --cor-card: #2B2018;
+  --cor-card-borda: #3D2B1F;
+  --cor-brasa: #C5402B;
+  --cor-brasa-clara: #E15A3F;
+  --cor-dourado: #E8B649;
+  --cor-creme: #F5EBDC;
+  --cor-creme-fraco: #C9BCA9;
+  --fonte-display: 'Anton', sans-serif;
+  --fonte-corpo: 'Inter', sans-serif;
+}
+
+*{ margin:0; padding:0; box-sizing:border-box; }
+html{ scroll-behavior:smooth; }
+body{
+  background: var(--cor-fundo);
+  color: var(--cor-creme);
+  font-family: var(--fonte-corpo);
+  padding-bottom: 100px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ===== HERO ===== */
+.hero{
+  position:relative;
+  padding: 48px 20px 32px;
+  background:
+    radial-gradient(circle at 20% 0%, rgba(197,64,43,0.25), transparent 60%),
+    var(--cor-fundo);
+  border-bottom: 1px solid var(--cor-card-borda);
+  overflow:hidden;
+}
+.hero::after{
+  content:"";
+  position:absolute;
+  bottom:-40px; right:-40px;
+  width:200px; height:200px;
+  background: var(--cor-brasa);
+  opacity:0.08;
+  border-radius:50%;
+  filter: blur(10px);
+}
+.hero-eyebrow{
+  font-size:11px;
+  letter-spacing:0.18em;
+  text-transform:uppercase;
+  color: var(--cor-dourado);
+  font-weight:700;
+  margin-bottom:10px;
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.hero-eyebrow::before{
+  content:"";
+  width:6px; height:6px;
+  border-radius:50%;
+  background: var(--cor-brasa-clara);
+  box-shadow: 0 0 8px var(--cor-brasa-clara);
+}
+.hero h1{
+  font-family: var(--fonte-display);
+  font-size: 44px;
+  line-height:0.95;
+  letter-spacing:0.01em;
+  color: var(--cor-creme);
+  text-transform: uppercase;
+}
+.hero h1 span{ color: var(--cor-brasa-clara); }
+.hero p{
+  margin-top:10px;
+  color: var(--cor-creme-fraco);
+  font-size:14.5px;
+  max-width: 480px;
+  line-height:1.5;
+}
+.hero-meta{
+  display:flex;
+  gap:16px;
+  margin-top:18px;
+  flex-wrap:wrap;
+}
+.hero-meta-item{
+  font-size:12.5px;
+  color: var(--cor-creme-fraco);
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+.hero-meta-item b{ color: var(--cor-creme); font-weight:700; }
+
+/* ===== NAV CATEGORIAS (sticky) ===== */
+.nav-cat{
+  position: sticky;
+  top:0;
+  z-index:40;
+  background: rgba(26,20,16,0.92);
+  backdrop-filter: blur(8px);
+  border-bottom:1px solid var(--cor-card-borda);
+  padding: 12px 16px;
+  display:flex;
+  gap:10px;
+  overflow-x:auto;
+  scrollbar-width:none;
+}
+.nav-cat::-webkit-scrollbar{ display:none; }
+.nav-cat button{
+  flex:0 0 auto;
+  background: transparent;
+  border:1px solid var(--cor-card-borda);
+  color: var(--cor-creme-fraco);
+  font-family:var(--fonte-corpo);
+  font-weight:600;
+  font-size:13px;
+  padding: 8px 16px;
+  border-radius:999px;
+  cursor:pointer;
+  transition: all 0.2s ease;
+  white-space:nowrap;
+}
+.nav-cat button:hover{ border-color: var(--cor-brasa); color:var(--cor-creme); }
+.nav-cat button.ativo{
+  background: var(--cor-brasa);
+  border-color: var(--cor-brasa);
+  color:#fff;
+}
+
+/* ===== CATEGORIAS / PRODUTOS ===== */
+.categoria{ padding: 28px 16px 4px; }
+.categoria-titulo{
+  font-family: var(--fonte-display);
+  font-size: 24px;
+  text-transform:uppercase;
+  color: var(--cor-dourado);
+  letter-spacing:0.02em;
+  margin-bottom:14px;
+  display:flex;
+  align-items:baseline;
+  gap:10px;
+}
+.categoria-titulo small{
+  font-family:var(--fonte-corpo);
+  font-size:12px;
+  font-weight:500;
+  color:var(--cor-creme-fraco);
+  text-transform:none;
+  letter-spacing:0;
+}
+
+.produto{
+  display:flex;
+  gap:14px;
+  background: var(--cor-card);
+  border:1px solid var(--cor-card-borda);
+  border-radius:14px;
+  padding:14px;
+  margin-bottom:12px;
+  transition: border-color 0.2s ease;
+}
+.produto:hover{ border-color: rgba(197,64,43,0.5); }
+.produto-img{
+  width:84px; height:84px;
+  border-radius:10px;
+  flex-shrink:0;
+  object-fit:cover;
+  background: var(--cor-fundo-alt);
+}
+.produto-info{ flex:1; min-width:0; display:flex; flex-direction:column; }
+.produto-nome{
+  font-weight:700;
+  font-size:15px;
+  color:var(--cor-creme);
+  margin-bottom:4px;
+}
+.produto-desc{
+  font-size:12.5px;
+  color: var(--cor-creme-fraco);
+  line-height:1.4;
+  margin-bottom:8px;
+  flex:1;
+}
+.produto-rodape{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  width:100%;
+}
+.produto-preco{
+  font-weight:800;
+  font-size:16px;
+  color: var(--cor-dourado);
+  flex-shrink:0;
+}
+.produto-add{
+  background: var(--cor-brasa);
+  color:#fff;
+  border:none;
+  width:32px; height:32px;
+  min-width:32px; min-height:32px;
+  border-radius:50%;
+  font-size:18px;
+  font-weight:700;
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  transition: transform 0.15s ease, background 0.2s ease;
+  flex-shrink:0;
+}
+#carrinho-debug-marker{ display:none; }
+.produto-add:hover{ background: var(--cor-brasa-clara); transform: scale(1.08); }
+.produto-add:active{ transform: scale(0.92); }
+
+.qtd-control{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  background: var(--cor-fundo-alt);
+  border-radius:999px;
+  padding:4px;
+}
+.qtd-control button{
+  width:26px; height:26px;
+  border-radius:50%;
+  border:none;
+  background: var(--cor-brasa);
+  color:#fff;
+  font-size:15px;
+  font-weight:700;
+  cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+}
+.qtd-control span{ font-weight:700; font-size:13px; min-width:14px; text-align:center; }
+
+/* ===== CARRINHO FLUTUANTE ===== */
+.carrinho-flutuante{
+  position:fixed;
+  bottom:16px; left:16px; right:16px;
+  background: var(--cor-brasa);
+  border-radius:16px;
+  padding:14px 18px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  cursor:pointer;
+  z-index:50;
+  transform: translateY(120%);
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.carrinho-flutuante.visivel{ transform: translateY(0); }
+.carrinho-flutuante-esq{ display:flex; align-items:center; gap:10px; }
+.carrinho-badge{
+  background: rgba(255,255,255,0.25);
+  color:#fff;
+  font-weight:800;
+  font-size:13px;
+  width:26px; height:26px;
+  border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+}
+.carrinho-flutuante-texto{ color:#fff; font-weight:700; font-size:14px; }
+.carrinho-flutuante-total{ color:#fff; font-weight:800; font-size:16px; }
+
+/* ===== MODAL CARRINHO ===== */
+.overlay{
+  position:fixed; inset:0;
+  background: rgba(0,0,0,0.6);
+  z-index:60;
+  opacity:0;
+  visibility:hidden;
+  transition: opacity 0.25s ease;
+}
+.overlay.aberto{ opacity:1; visibility:visible; }
+
+.modal-carrinho{
+  position:fixed;
+  bottom:0; left:0; right:0;
+  background: var(--cor-fundo-alt);
+  border-top:1px solid var(--cor-card-borda);
+  border-radius:20px 20px 0 0;
+  z-index:61;
+  max-height:80vh;
+  display:flex;
+  flex-direction:column;
+  transform: translateY(100%);
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.modal-carrinho.aberto{ transform: translateY(0); }
+.modal-header{
+  padding:18px 20px 14px;
+  border-bottom:1px solid var(--cor-card-borda);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+}
+.modal-header h2{
+  font-family:var(--fonte-display);
+  text-transform:uppercase;
+  font-size:20px;
+  color:var(--cor-creme);
+}
+.modal-fechar{
+  background:none; border:none; color:var(--cor-creme-fraco);
+  font-size:22px; cursor:pointer; line-height:1;
+}
+.modal-itens{
+  padding:12px 20px;
+  overflow-y:auto;
+  flex:1;
+}
+.modal-item{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:10px 0;
+  border-bottom:1px solid var(--cor-card-borda);
+  gap:10px;
+}
+.modal-item-nome{ font-size:14px; font-weight:600; flex:1; }
+.modal-item-sub{ font-size:12px; color:var(--cor-creme-fraco); }
+.modal-item-preco{ font-weight:700; color:var(--cor-dourado); font-size:14px; white-space:nowrap; }
+.modal-vazio{
+  text-align:center;
+  padding:40px 20px;
+  color:var(--cor-creme-fraco);
+  font-size:14px;
+}
+.modal-footer{
+  padding:16px 20px 22px;
+  border-top:1px solid var(--cor-card-borda);
+}
+.modal-total{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:14px;
+  font-size:15px;
+}
+.modal-total b{ font-family:var(--fonte-display); font-size:22px; color:var(--cor-dourado); }
+.btn-finalizar{
+  width:100%;
+  background: var(--cor-brasa);
+  color:#fff;
+  border:none;
+  padding:15px;
+  border-radius:12px;
+  font-family:var(--fonte-corpo);
+  font-weight:800;
+  font-size:15px;
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  transition: background 0.2s ease;
+}
+.btn-finalizar:hover{ background: var(--cor-brasa-clara); }
+.btn-finalizar:disabled{ background:#444; cursor:not-allowed; }
+
+/* ===== RODAPÉ DEMO ===== */
+.aviso-demo{
+  text-align:center;
+  padding:24px 20px;
+  font-size:11.5px;
+  color: var(--cor-creme-fraco);
+  border-top:1px solid var(--cor-card-borda);
+  margin-top:20px;
+}
+.aviso-demo b{ color:var(--cor-dourado); }
+
+/* ===== ETAPAS DO CHECKOUT ===== */
+.etapa-titulo{
+  font-family: var(--fonte-display);
+  font-size:17px;
+  text-transform:uppercase;
+  color: var(--cor-dourado);
+  letter-spacing:0.02em;
+  margin: 4px 0 14px;
+}
+.opcoes-grid{
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap:10px;
+  margin-bottom:18px;
+}
+.opcao-card{
+  background: var(--cor-card);
+  border:2px solid var(--cor-card-borda);
+  border-radius:12px;
+  padding:14px 10px;
+  text-align:center;
+  cursor:pointer;
+  transition: all 0.2s ease;
+  color: var(--cor-creme-fraco);
+  font-weight:600;
+  font-size:13.5px;
+}
+.opcao-card .icone{ font-size:22px; display:block; margin-bottom:6px; }
+.opcao-card:hover{ border-color: rgba(197,64,43,0.5); }
+.opcao-card.selecionado{
+  border-color: var(--cor-brasa);
+  background: rgba(197,64,43,0.12);
+  color: var(--cor-creme);
+}
+
+.campo-grupo{ margin-bottom:14px; }
+.campo-label{
+  font-size:12.5px;
+  font-weight:600;
+  color: var(--cor-creme-fraco);
+  margin-bottom:6px;
+  display:block;
+}
+.campo-input{
+  width:100%;
+  background: var(--cor-card);
+  border:1px solid var(--cor-card-borda);
+  border-radius:10px;
+  padding:11px 13px;
+  color: var(--cor-creme);
+  font-family: var(--fonte-corpo);
+  font-size:14px;
+  outline:none;
+  transition: border-color 0.2s ease;
+}
+.campo-input:focus{ border-color: var(--cor-brasa); }
+.campo-input::placeholder{ color: #6b5d4f; }
+.campo-linha{ display:flex; gap:10px; }
+.campo-linha .campo-grupo{ flex:1; }
+
+.lista-pagamento{ display:flex; flex-direction:column; gap:8px; margin-bottom:14px; }
+.opcao-pagamento{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  background: var(--cor-card);
+  border:2px solid var(--cor-card-borda);
+  border-radius:12px;
+  padding:12px 14px;
+  cursor:pointer;
+  transition: all 0.2s ease;
+}
+.opcao-pagamento:hover{ border-color: rgba(197,64,43,0.5); }
+.opcao-pagamento.selecionado{
+  border-color: var(--cor-brasa);
+  background: rgba(197,64,43,0.12);
+}
+.opcao-pagamento .icone{ font-size:18px; flex-shrink:0; }
+.opcao-pagamento .texto{ font-weight:600; font-size:14px; color: var(--cor-creme); flex:1; }
+
+.dividir-toggle{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  background: var(--cor-card);
+  border:1px solid var(--cor-card-borda);
+  border-radius:12px;
+  padding:12px 14px;
+  margin-bottom:14px;
+  cursor:pointer;
+}
+.dividir-toggle .texto{ font-weight:600; font-size:13.5px; }
+.switch{
+  width:42px; height:24px;
+  background: var(--cor-card-borda);
+  border-radius:999px;
+  position:relative;
+  transition: background 0.2s ease;
+  flex-shrink:0;
+}
+.switch.ativo{ background: var(--cor-brasa); }
+.switch::after{
+  content:"";
+  position:absolute;
+  top:3px; left:3px;
+  width:18px; height:18px;
+  border-radius:50%;
+  background:#fff;
+  transition: left 0.2s ease;
+}
+.switch.ativo::after{ left:21px; }
+
+.bloco-divisao{
+  background: var(--cor-fundo-alt);
+  border-radius:12px;
+  padding:14px;
+  margin-bottom:14px;
+}
+.bloco-divisao .campo-grupo:last-child{ margin-bottom:0; }
+.resumo-divisao{
+  font-size:12.5px;
+  color: var(--cor-creme-fraco);
+  margin-top:8px;
+  text-align:right;
+}
+.resumo-divisao.erro{ color: var(--cor-brasa-clara); font-weight:600; }
+
+.btn-voltar{
+  background:none;
+  border:none;
+  color: var(--cor-creme-fraco);
+  font-size:13px;
+  font-weight:600;
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  gap:6px;
+  margin-bottom:14px;
+  padding:0;
+}
+.btn-voltar:hover{ color: var(--cor-creme); }
+
+.btn-continuar{
+  width:100%;
+  background: var(--cor-brasa);
+  color:#fff;
+  border:none;
+  padding:15px;
+  border-radius:12px;
+  font-family:var(--fonte-corpo);
+  font-weight:800;
+  font-size:15px;
+  cursor:pointer;
+  transition: background 0.2s ease;
+}
+.btn-continuar:hover{ background: var(--cor-brasa-clara); }
+.btn-continuar:disabled{ background:#444; cursor:not-allowed; }
+
+.resumo-linha{
+  display:flex;
+  justify-content:space-between;
+  font-size:13px;
+  color: var(--cor-creme-fraco);
+  padding:6px 0;
+}
+.resumo-linha b{ color: var(--cor-creme); font-weight:600; }
+
+.pix-card{
+  background: var(--cor-fundo-alt);
+  border: 1.5px dashed var(--cor-dourado);
+  border-radius:12px;
+  padding:16px;
+  margin-top:4px;
+  margin-bottom:14px;
+}
+.pix-card-titulo{
+  font-size:12.5px;
+  font-weight:700;
+  color: var(--cor-dourado);
+  text-transform:uppercase;
+  letter-spacing:0.04em;
+  margin-bottom:8px;
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+.pix-card-nome{
+  font-size:13px;
+  color: var(--cor-creme-fraco);
+  margin-bottom:10px;
+}
+.pix-card-chave{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  background: var(--cor-card);
+  border:1px solid var(--cor-card-borda);
+  border-radius:10px;
+  padding:10px 12px;
+}
+.pix-card-chave span{
+  flex:1;
+  font-size:14px;
+  font-weight:600;
+  color: var(--cor-creme);
+  word-break: break-all;
+}
+.btn-copiar{
+  background: var(--cor-brasa);
+  color:#fff;
+  border:none;
+  padding:8px 12px;
+  border-radius:8px;
+  font-size:12.5px;
+  font-weight:700;
+  cursor:pointer;
+  flex-shrink:0;
+  transition: background 0.2s ease;
+}
+.btn-copiar:hover{ background: var(--cor-brasa-clara); }
+.btn-copiar.copiado{ background: #4a7c59; }
+.pix-card-aviso{
+  font-size:12px;
+  color: var(--cor-creme-fraco);
+  margin-top:10px;
+  line-height:1.4;
+}
+
+@media(min-width:600px){
+  .carrinho-flutuante, .modal-carrinho{ max-width:480px; margin:0 auto; left:0; right:0; }
+}
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="hero-eyebrow">Aberto agora</div>
+  <h1>BRASA<br><span>&amp; CIA</span></h1>
+  <p>Hambúrguer artesanal feito na brasa, pão na chapa e blend próprio. Veja o cardápio e peça direto por aqui.</p>
+  <div class="hero-meta">
+    <div class="hero-meta-item">⏱ <b>25-35 min</b></div>
+    <div class="hero-meta-item">📍 <b>Retirada e entrega</b></div>
+    <div class="hero-meta-item">⭐ <b>4.8</b> (320 avaliações)</div>
+  </div>
+</div>
+
+<nav class="nav-cat" id="navCat"></nav>
+
+<main id="categorias"></main>
+
+<div class="aviso-demo">Este é um cardápio <b>demonstrativo</b> criado pela <b>FH Digital</b>. Os pedidos são enviados via WhatsApp.</div>
+
+<div class="carrinho-flutuante" id="carrinhoFlutuante">
+  <div class="carrinho-flutuante-esq">
+    <div class="carrinho-badge" id="carrinhoBadge">0</div>
+    <div class="carrinho-flutuante-texto">Ver pedido</div>
+  </div>
+  <div class="carrinho-flutuante-total" id="carrinhoTotalFlutuante">R$ 0,00</div>
+</div>
+
+<div class="overlay" id="overlay"></div>
+<div class="modal-carrinho" id="modalCarrinho">
+  <div class="modal-header">
+    <h2 id="modalTitulo">Seu pedido</h2>
+    <button class="modal-fechar" id="fecharModal">✕</button>
+  </div>
+  <div class="modal-itens" id="modalConteudo"></div>
+  <div class="modal-footer" id="modalFooter"></div>
+</div>
+
+<script>
+/* ============================================
+   DADOS DO CARDÁPIO — troque aqui pra outro cliente
+   ============================================ */
+const NUMERO_WHATSAPP = "5519999999999"; // formato: 55 + DDD + número, sem espaços ou símbolos
+const CHAVE_PIX = "contato@brasaecia.com.br"; // pode ser e-mail, CPF/CNPJ, telefone ou chave aleatória
+const NOME_PIX = "Brasa & Cia Lanches"; // nome do titular que aparece no Pix
+
+const cardapio = [
+  {
+    categoria: "Burgers",
+    itens: [
+      {
+        id: "b1",
+        nome: "Brasa Clássico",
+        desc: "Blend 160g, queijo cheddar, alface, tomate, cebola caramelizada e maionese da casa.",
+        preco: 28.90,
+        img: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=200&h=200&fit=crop"
+      },
+      {
+        id: "b2",
+        nome: "Duplo Bacon",
+        desc: "Dois blends 120g, bacon crocante, queijo prato dobrado e barbecue artesanal.",
+        preco: 34.90,
+        img: "https://images.unsplash.com/photo-1553979459-d2229ba7433b?w=200&h=200&fit=crop"
+      },
+      {
+        id: "b3",
+        nome: "Frango Crispy",
+        desc: "Peito de frango empanado crocante, maionese de alho e picles caseiro.",
+        preco: 26.90,
+        img: "https://images.unsplash.com/photo-1606755962773-d324e0a13086?w=200&h=200&fit=crop"
+      },
+      {
+        id: "b4",
+        nome: "Veggie Grelhado",
+        desc: "Hambúrguer de grão-de-bico e cogumelos, rúcula e maionese de ervas.",
+        preco: 27.90,
+        img: "https://images.unsplash.com/photo-1525059696034-4967a729002e?w=200&h=200&fit=crop"
+      }
+    ]
+  },
+  {
+    categoria: "Porções",
+    itens: [
+      {
+        id: "p1",
+        nome: "Batata Frita Brasa",
+        desc: "Porção generosa, crocante por fora, com tempero da casa.",
+        preco: 18.90,
+        img: "https://images.unsplash.com/photo-1576107232684-1279f390859f?w=200&h=200&fit=crop"
+      },
+      {
+        id: "p2",
+        nome: "Onion Rings",
+        desc: "Anéis de cebola empanados, servidos com molho barbecue.",
+        preco: 21.90,
+        img: "https://images.unsplash.com/photo-1639024471283-03518883512d?w=200&h=200&fit=crop"
+      }
+    ]
+  },
+  {
+    categoria: "Bebidas",
+    itens: [
+      {
+        id: "d1",
+        nome: "Refrigerante Lata",
+        desc: "Coca-Cola, Guaraná ou Sprite — 350ml.",
+        preco: 6.50,
+        img: "https://images.unsplash.com/photo-1622483767028-3f66f32aef97?w=200&h=200&fit=crop"
+      },
+      {
+        id: "d2",
+        nome: "Limonada Suíça",
+        desc: "Feita na hora, com leite condensado — 400ml.",
+        preco: 9.90,
+        img: "https://images.unsplash.com/photo-1621263764928-df1444c5e859?w=200&h=200&fit=crop"
+      }
+    ]
+  }
+];
+
+/* ============================================
+   LÓGICA DO CARDÁPIO (não precisa editar)
+   ============================================ */
+let carrinho = {}; // { id: quantidade }
+let etapaAtual = "carrinho"; // carrinho | entrega | pagamento
+let pedido = {
+  nome: "",
+  tipoEntrega: null,      // "entrega" | "retirada"
+  endereco: { rua: "", numero: "", bairro: "", complemento: "" },
+  formaPagamento: null,   // "pix" | "dinheiro" | "debito" | "credito" | "vale"
+  trocoPara: "",
+  dividirPagamento: false,
+  divisao: []             // [{ forma: "dinheiro", valor: 10 }, ...]
+};
+
+function formatarPreco(v){
+  return "R$ " + v.toFixed(2).replace(".", ",");
+}
+
+function buscarItem(id){
+  for(const cat of cardapio){
+    const item = cat.itens.find(i => i.id === id);
+    if(item) return item;
+  }
+}
+
+function calcularTotal(){
+  let total = 0;
+  for(const id in carrinho){
+    total += buscarItem(id).preco * carrinho[id];
+  }
+  return total;
+}
+
+function totalItens(){
+  return Object.values(carrinho).reduce((a,b) => a+b, 0);
+}
+
+function renderizarCardapio(){
+  const nav = document.getElementById("navCat");
+  const main = document.getElementById("categorias");
+  nav.innerHTML = "";
+  main.innerHTML = "";
+
+  cardapio.forEach((cat, idx) => {
+    const btn = document.createElement("button");
+    btn.textContent = cat.categoria;
+    btn.className = idx === 0 ? "ativo" : "";
+    btn.onclick = () => {
+      document.getElementById("cat-" + idx).scrollIntoView({behavior:"smooth", block:"start"});
+    };
+    nav.appendChild(btn);
+
+    const secao = document.createElement("section");
+    secao.className = "categoria";
+    secao.id = "cat-" + idx;
+    secao.innerHTML = `<div class="categoria-titulo">${cat.categoria} <small>${cat.itens.length} ${cat.itens.length === 1 ? 'item' : 'itens'}</small></div>`;
+
+    cat.itens.forEach(item => {
+      const div = document.createElement("div");
+      div.className = "produto";
+      div.innerHTML = `
+        <img class="produto-img" src="${item.img}" alt="${item.nome}" onerror="this.style.display='none'">
+        <div class="produto-info">
+          <div class="produto-nome">${item.nome}</div>
+          <div class="produto-desc">${item.desc}</div>
+          <div class="produto-rodape">
+            <span class="produto-preco">${formatarPreco(item.preco)}</span>
+            <div class="control-wrap" data-id="${item.id}"></div>
+          </div>
+        </div>`;
+      secao.appendChild(div);
+      const controlEl = div.querySelector(".control-wrap");
+      controlEl.innerHTML = `<button class="produto-add" onclick="adicionar('${item.id}')">+</button>`;
+    });
+
+    main.appendChild(secao);
+  });
+}
+
+function renderizarControle(id){
+  const el = document.querySelector(`.control-wrap[data-id="${id}"]`);
+  if(!el) return;
+  const qtd = carrinho[id] || 0;
+
+  if(qtd === 0){
+    el.innerHTML = `<button class="produto-add" onclick="adicionar('${id}')">+</button>`;
+  } else {
+    el.innerHTML = `
+      <div class="qtd-control">
+        <button onclick="remover('${id}')">−</button>
+        <span>${qtd}</span>
+        <button onclick="adicionar('${id}')">+</button>
+      </div>`;
+  }
+}
+
+function adicionar(id){
+  carrinho[id] = (carrinho[id] || 0) + 1;
+  renderizarControle(id);
+  atualizarCarrinhoFlutuante();
+  if(document.getElementById("modalCarrinho").classList.contains("aberto")) renderizarModal();
+}
+
+function remover(id){
+  if(!carrinho[id]) return;
+  carrinho[id] -= 1;
+  if(carrinho[id] <= 0) delete carrinho[id];
+  renderizarControle(id);
+  atualizarCarrinhoFlutuante();
+  if(document.getElementById("modalCarrinho").classList.contains("aberto")) renderizarModal();
+}
+
+function atualizarCarrinhoFlutuante(){
+  const qtd = totalItens();
+  const flutuante = document.getElementById("carrinhoFlutuante");
+  document.getElementById("carrinhoBadge").textContent = qtd;
+  document.getElementById("carrinhoTotalFlutuante").textContent = formatarPreco(calcularTotal());
+  flutuante.classList.toggle("visivel", qtd > 0);
+}
+
+function adicionar(id){
+  carrinho[id] = (carrinho[id] || 0) + 1;
+  renderizarControle(id);
+  atualizarCarrinhoFlutuante();
+  if(document.getElementById("modalCarrinho").classList.contains("aberto") && etapaAtual === "carrinho") renderizarEtapaCarrinho();
+}
+
+function remover(id){
+  if(!carrinho[id]) return;
+  carrinho[id] -= 1;
+  if(carrinho[id] <= 0) delete carrinho[id];
+  renderizarControle(id);
+  atualizarCarrinhoFlutuante();
+  if(document.getElementById("modalCarrinho").classList.contains("aberto") && etapaAtual === "carrinho") renderizarEtapaCarrinho();
+}
+
+function atualizarCarrinhoFlutuante(){
+  const qtd = totalItens();
+  const flutuante = document.getElementById("carrinhoFlutuante");
+  document.getElementById("carrinhoBadge").textContent = qtd;
+  document.getElementById("carrinhoTotalFlutuante").textContent = formatarPreco(calcularTotal());
+  flutuante.classList.toggle("visivel", qtd > 0);
+}
+
+/* ===== NAVEGAÇÃO ENTRE ETAPAS ===== */
+function irPara(etapa){
+  etapaAtual = etapa;
+  if(etapa === "carrinho") renderizarEtapaCarrinho();
+  if(etapa === "entrega") renderizarEtapaEntrega();
+  if(etapa === "pagamento") renderizarEtapaPagamento();
+  document.getElementById("modalConteudo").scrollTop = 0;
+}
+
+/* ===== ETAPA 1: CARRINHO ===== */
+function renderizarEtapaCarrinho(){
+  document.getElementById("modalTitulo").textContent = "Seu pedido";
+  const cont = document.getElementById("modalConteudo");
+  const ids = Object.keys(carrinho);
+
+  if(ids.length === 0){
+    cont.innerHTML = `<div class="modal-vazio">Seu pedido está vazio.<br>Adicione itens do cardápio.</div>`;
+  } else {
+    cont.innerHTML = ids.map(id => {
+      const item = buscarItem(id);
+      const qtd = carrinho[id];
+      return `
+        <div class="modal-item">
+          <div>
+            <div class="modal-item-nome">${item.nome}</div>
+            <div class="modal-item-sub">${qtd}x ${formatarPreco(item.preco)}</div>
+          </div>
+          <div class="modal-item-preco">${formatarPreco(item.preco * qtd)}</div>
+        </div>`;
+    }).join("");
+  }
+
+  document.getElementById("modalFooter").innerHTML = `
+    <div class="modal-total">
+      <span>Total</span>
+      <b>${formatarPreco(calcularTotal())}</b>
+    </div>
+    <button class="btn-finalizar" id="btnIrEntrega" ${ids.length === 0 ? "disabled" : ""}>Continuar</button>`;
+
+  document.getElementById("btnIrEntrega").onclick = () => irPara("entrega");
+}
+
+/* ===== ETAPA 2: ENTREGA OU RETIRADA ===== */
+function renderizarEtapaEntrega(){
+  document.getElementById("modalTitulo").textContent = "Entrega ou retirada?";
+  const cont = document.getElementById("modalConteudo");
+
+  cont.innerHTML = `
+    <button class="btn-voltar" id="btnVoltarCarrinho">← Voltar ao pedido</button>
+    <div class="campo-grupo">
+      <label class="campo-label">Nome para o pedido</label>
+      <input class="campo-input" id="inputNome" placeholder="Seu nome" value="${pedido.nome}">
+    </div>
+    <div class="opcoes-grid">
+      <div class="opcao-card ${pedido.tipoEntrega === 'entrega' ? 'selecionado' : ''}" data-tipo="entrega">
+        <span class="icone">🛵</span> Entrega
+      </div>
+      <div class="opcao-card ${pedido.tipoEntrega === 'retirada' ? 'selecionado' : ''}" data-tipo="retirada">
+        <span class="icone">🏠</span> Retirar no local
+      </div>
+    </div>
+    <div id="campoEndereco"></div>`;
+
+  document.getElementById("btnVoltarCarrinho").onclick = () => irPara("carrinho");
+
+  const inputNome = document.getElementById("inputNome");
+  inputNome.oninput = () => { pedido.nome = inputNome.value; atualizarBotaoEntrega(); };
+
+  cont.querySelectorAll(".opcao-card").forEach(card => {
+    card.onclick = () => {
+      pedido.tipoEntrega = card.dataset.tipo;
+      renderizarEtapaEntrega();
+    };
+  });
+
+  const campoEndereco = document.getElementById("campoEndereco");
+  if(pedido.tipoEntrega === "entrega"){
+    campoEndereco.innerHTML = `
+      <div class="campo-grupo">
+        <label class="campo-label">Rua</label>
+        <input class="campo-input" id="inputRua" placeholder="Nome da rua" value="${pedido.endereco.rua}">
+      </div>
+      <div class="campo-linha">
+        <div class="campo-grupo">
+          <label class="campo-label">Número</label>
+          <input class="campo-input" id="inputNumero" placeholder="123" value="${pedido.endereco.numero}">
+        </div>
+        <div class="campo-grupo">
+          <label class="campo-label">Bairro</label>
+          <input class="campo-input" id="inputBairro" placeholder="Bairro" value="${pedido.endereco.bairro}">
+        </div>
+      </div>
+      <div class="campo-grupo">
+        <label class="campo-label">Complemento (opcional)</label>
+        <input class="campo-input" id="inputComplemento" placeholder="Apto, bloco, ponto de referência..." value="${pedido.endereco.complemento}">
+      </div>`;
+
+    ["Rua","Numero","Bairro","Complemento"].forEach(campo => {
+      const input = document.getElementById("input" + campo);
+      input.oninput = () => { pedido.endereco[campo.toLowerCase()] = input.value; atualizarBotaoEntrega(); };
+    });
+  } else {
+    campoEndereco.innerHTML = "";
+  }
+
+  const footer = document.getElementById("modalFooter");
+  footer.innerHTML = `<button class="btn-continuar" id="btnIrPagamento">Continuar</button>`;
+  document.getElementById("btnIrPagamento").onclick = () => irPara("pagamento");
+  atualizarBotaoEntrega();
+}
+
+function atualizarBotaoEntrega(){
+  const btn = document.getElementById("btnIrPagamento");
+  if(!btn) return;
+  let valido = !!pedido.nome.trim() && !!pedido.tipoEntrega;
+  if(valido && pedido.tipoEntrega === "entrega"){
+    valido = pedido.endereco.rua.trim() && pedido.endereco.numero.trim() && pedido.endereco.bairro.trim();
+  }
+  btn.disabled = !valido;
+}
+
+/* ===== ETAPA 3: PAGAMENTO ===== */
+const formasPagamento = [
+  { id: "pix", icone: "💠", texto: "Pix" },
+  { id: "dinheiro", icone: "💵", texto: "Dinheiro" },
+  { id: "debito", icone: "💳", texto: "Cartão de Débito" },
+  { id: "credito", icone: "💳", texto: "Cartão de Crédito" },
+  { id: "vale", icone: "🍽️", texto: "Vale Alimentação" }
+];
+
+function renderizarEtapaPagamento(){
+  document.getElementById("modalTitulo").textContent = "Forma de pagamento";
+  const cont = document.getElementById("modalConteudo");
+  const total = calcularTotal();
+
+  cont.innerHTML = `
+    <button class="btn-voltar" id="btnVoltarEntrega">← Voltar</button>
+
+    <div class="dividir-toggle" id="toggleDividir">
+      <span class="texto">Dividir o pagamento em duas formas</span>
+      <div class="switch ${pedido.dividirPagamento ? 'ativo' : ''}"></div>
+    </div>
+
+    <div id="areaPagamento"></div>`;
+
+  document.getElementById("btnVoltarEntrega").onclick = () => irPara("entrega");
+  document.getElementById("toggleDividir").onclick = () => {
+    pedido.dividirPagamento = !pedido.dividirPagamento;
+    if(pedido.dividirPagamento && pedido.divisao.length === 0){
+      pedido.divisao = [{ forma: null, valor: "" }, { forma: null, valor: "" }];
+    }
+    renderizarEtapaPagamento();
+  };
+
+  const area = document.getElementById("areaPagamento");
+
+  if(!pedido.dividirPagamento){
+    area.innerHTML = `
+      <div class="lista-pagamento">
+        ${formasPagamento.map(f => `
+          <div class="opcao-pagamento ${pedido.formaPagamento === f.id ? 'selecionado' : ''}" data-forma="${f.id}">
+            <span class="icone">${f.icone}</span>
+            <span class="texto">${f.texto}</span>
+          </div>`).join("")}
+      </div>
+      <div id="campoExtra"></div>`;
+
+    area.querySelectorAll(".opcao-pagamento").forEach(op => {
+      op.onclick = () => {
+        pedido.formaPagamento = op.dataset.forma;
+        renderizarEtapaPagamento();
+      };
+    });
+
+    const campoExtra = document.getElementById("campoExtra");
+    if(pedido.formaPagamento === "dinheiro"){
+      campoExtra.innerHTML = `
+        <div class="campo-grupo">
+          <label class="campo-label">Precisa de troco para quanto? (deixe vazio se for valor exato)</label>
+          <input class="campo-input" id="inputTroco" type="number" step="0.01" placeholder="Ex: 50,00" value="${pedido.trocoPara}">
+        </div>`;
+      document.getElementById("inputTroco").oninput = (e) => { pedido.trocoPara = e.target.value; };
+    } else if(pedido.formaPagamento === "pix"){
+      campoExtra.innerHTML = `
+        <div class="pix-card">
+          <div class="pix-card-titulo">💠 Chave Pix para pagamento</div>
+          <div class="pix-card-nome">${NOME_PIX}</div>
+          <div class="pix-card-chave">
+            <span id="textoChavePix">${CHAVE_PIX}</span>
+            <button class="btn-copiar" id="btnCopiarPix">Copiar</button>
+          </div>
+          <div class="pix-card-aviso">Copie a chave, faça o pagamento no valor de <b style="color:var(--cor-dourado)">${formatarPreco(total)}</b> e envie o pedido. O comprovante pode ser enviado junto no WhatsApp.</div>
+        </div>`;
+      document.getElementById("btnCopiarPix").onclick = (e) => {
+        navigator.clipboard.writeText(CHAVE_PIX).then(() => {
+          e.target.textContent = "Copiado ✓";
+          e.target.classList.add("copiado");
+          setTimeout(() => {
+            e.target.textContent = "Copiar";
+            e.target.classList.remove("copiado");
+          }, 2000);
+        });
+      };
+    } else {
+      campoExtra.innerHTML = "";
+    }
+  } else {
+    area.innerHTML = `
+      <div class="bloco-divisao">
+        ${[0,1].map(i => `
+          <div class="campo-grupo">
+            <label class="campo-label">Forma ${i+1}</label>
+            <select class="campo-input" id="selectForma${i}">
+              <option value="">Selecione...</option>
+              ${formasPagamento.map(f => `<option value="${f.id}" ${pedido.divisao[i]?.forma === f.id ? 'selected' : ''}>${f.texto}</option>`).join("")}
+            </select>
+          </div>
+          <div class="campo-grupo">
+            <label class="campo-label">Valor nessa forma (R$)</label>
+            <input class="campo-input" id="inputValor${i}" type="number" step="0.01" placeholder="0,00" value="${pedido.divisao[i]?.valor || ''}">
+          </div>`).join("<hr style='border:none;border-top:1px solid var(--cor-card-borda);margin:14px 0'>")}
+        <div class="resumo-divisao" id="resumoDivisao"></div>
+      </div>`;
+
+    [0,1].forEach(i => {
+      document.getElementById("selectForma" + i).onchange = (e) => {
+        if(!pedido.divisao[i]) pedido.divisao[i] = { forma: null, valor: "" };
+        pedido.divisao[i].forma = e.target.value;
+        atualizarResumoDivisao();
+      };
+      document.getElementById("inputValor" + i).oninput = (e) => {
+        if(!pedido.divisao[i]) pedido.divisao[i] = { forma: null, valor: "" };
+        pedido.divisao[i].valor = e.target.value;
+        atualizarResumoDivisao();
+      };
+    });
+    atualizarResumoDivisao();
+  }
+
+  const footer = document.getElementById("modalFooter");
+  footer.innerHTML = `
+    <div class="modal-total">
+      <span>Total do pedido</span>
+      <b>${formatarPreco(total)}</b>
+    </div>
+    <button class="btn-finalizar" id="btnFinalizar">📲 Enviar pedido pelo WhatsApp</button>`;
+  document.getElementById("btnFinalizar").onclick = enviarPedidoWhatsApp;
+  atualizarBotaoFinalizar();
+}
+
+function atualizarResumoDivisao(){
+  const el = document.getElementById("resumoDivisao");
+  if(!el) return;
+  const total = calcularTotal();
+  const soma = pedido.divisao.reduce((acc, d) => acc + (parseFloat(d.valor) || 0), 0);
+  const diff = total - soma;
+  if(Math.abs(diff) < 0.01){
+    el.textContent = "Valores conferem com o total ✓";
+    el.className = "resumo-divisao";
+  } else if(diff > 0){
+    el.textContent = `Faltam ${formatarPreco(diff)} para completar o total`;
+    el.className = "resumo-divisao erro";
+  } else {
+    el.textContent = `Valor excede o total em ${formatarPreco(Math.abs(diff))}`;
+    el.className = "resumo-divisao erro";
+  }
+  atualizarBotaoFinalizar();
+}
+
+function atualizarBotaoFinalizar(){
+  const btn = document.getElementById("btnFinalizar");
+  if(!btn) return;
+  let valido = false;
+  if(!pedido.dividirPagamento){
+    valido = !!pedido.formaPagamento;
+  } else {
+    const total = calcularTotal();
+    const soma = pedido.divisao.reduce((acc, d) => acc + (parseFloat(d.valor) || 0), 0);
+    const formasOk = pedido.divisao.every(d => d.forma);
+    valido = formasOk && Math.abs(total - soma) < 0.01;
+  }
+  btn.disabled = !valido;
+}
+
+/* ===== MONTAGEM DA MENSAGEM FINAL ===== */
+function textoFormaPagamento(id){
+  const f = formasPagamento.find(f => f.id === id);
+  return f ? f.texto : id;
+}
+
+function montarMensagemWhatsApp(){
+  const ids = Object.keys(carrinho);
+  let msg = `Olá! Meu nome é *${pedido.nome}* e gostaria de fazer o seguinte pedido:\n\n`;
+  ids.forEach(id => {
+    const item = buscarItem(id);
+    const qtd = carrinho[id];
+    msg += `• ${qtd}x ${item.nome} — ${formatarPreco(item.preco * qtd)}\n`;
+  });
+  msg += `\n*Total: ${formatarPreco(calcularTotal())}*\n`;
+
+  msg += `\n📍 *${pedido.tipoEntrega === 'entrega' ? 'Entrega' : 'Retirada no local'}*`;
+  if(pedido.tipoEntrega === "entrega"){
+    const e = pedido.endereco;
+    msg += `\n${e.rua}, ${e.numero} — ${e.bairro}`;
+    if(e.complemento) msg += ` (${e.complemento})`;
+  }
+
+  msg += `\n\n💰 *Pagamento*\n`;
+  if(!pedido.dividirPagamento){
+    msg += textoFormaPagamento(pedido.formaPagamento);
+    if(pedido.formaPagamento === "dinheiro" && pedido.trocoPara){
+      msg += ` — troco para ${formatarPreco(parseFloat(pedido.trocoPara))}`;
+    }
+  } else {
+    pedido.divisao.forEach(d => {
+      msg += `${formatarPreco(parseFloat(d.valor) || 0)} em ${textoFormaPagamento(d.forma)}\n`;
+    });
+  }
+
+  return encodeURIComponent(msg.trim());
+}
+
+function enviarPedidoWhatsApp(){
+  if(totalItens() === 0) return;
+  const texto = montarMensagemWhatsApp();
+  window.open(`https://wa.me/${NUMERO_WHATSAPP}?text=${texto}`, "_blank");
+  fecharModalCarrinho();
+}
+
+// Eventos
+document.getElementById("carrinhoFlutuante").onclick = () => {
+  irPara("carrinho");
+  document.getElementById("overlay").classList.add("aberto");
+  document.getElementById("modalCarrinho").classList.add("aberto");
+};
+
+function fecharModalCarrinho(){
+  document.getElementById("overlay").classList.remove("aberto");
+  document.getElementById("modalCarrinho").classList.remove("aberto");
+}
+
+document.getElementById("fecharModal").onclick = fecharModalCarrinho;
+document.getElementById("overlay").onclick = fecharModalCarrinho;
+
+renderizarCardapio();
+</script>
+
+
+</body>
+</html>
