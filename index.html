@@ -1396,9 +1396,16 @@ function aplicarEstadoAberto(){
 }
 
 async function iniciar(){
-  await carregarDadosDaLoja();
+  // Renderiza imediatamente com os dados fixos (fallback), pra nunca mostrar tela vazia
   renderizarCardapio();
   carregarCarrinhoLocal();
+  Object.keys(carrinho).forEach(id => renderizarControle(id));
+  atualizarCarrinhoFlutuante();
+  aplicarEstadoAberto();
+
+  // Busca os dados reais do Supabase em segundo plano e atualiza a tela quando chegar
+  await carregarDadosDaLoja();
+  renderizarCardapio();
   Object.keys(carrinho).forEach(id => renderizarControle(id));
   atualizarCarrinhoFlutuante();
   aplicarEstadoAberto();
