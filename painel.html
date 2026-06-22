@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Painel — FH Cardápio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+
+:root{
+  --cor-fundo: #1A1410;
+  --cor-fundo-alt: #221A14;
+  --cor-card: #2B2018;
+  --cor-card-borda: #3D2B1F;
+  --cor-brasa: #C5402B;
+  --cor-brasa-clara: #E15A3F;
+  --cor-dourado: #E8B649;
+  --cor-creme: #F5EBDC;
+  --cor-creme-fraco: #C9BCA9;
+  --cor-verde: #4A7C59;
+  --fonte-display: 'Anton', sans-serif;
+  --fonte-corpo: 'Inter', sans-serif;
+}
+
+*{ margin:0; padding:0; box-sizing:border-box; }
+body{
+  background: var(--cor-fundo);
+  color: var(--cor-creme);
+  font-family: var(--fonte-corpo);
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+
+/* ===== TELA DE LOGIN ===== */
+.login-wrap{
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.login-card{
+  background: var(--cor-card);
+  border: 1px solid var(--cor-card-borda);
+  border-radius: 16px;
+  padding: 32px 28px;
+  width: 100%;
+  max-width: 360px;
+  text-align: center;
+}
+.login-card h1{
+  font-family: var(--fonte-display);
+  font-size: 22px;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+  color: var(--cor-creme);
+}
+.login-card p{
+  font-size: 13px;
+  color: var(--cor-creme-fraco);
+  margin-bottom: 22px;
+}
+.login-input{
+  width: 100%;
+  background: var(--cor-fundo-alt);
+  border: 1px solid var(--cor-card-borda);
+  border-radius: 10px;
+  padding: 13px 14px;
+  color: var(--cor-creme);
+  font-size: 15px;
+  outline: none;
+  margin-bottom: 14px;
+  text-align: center;
+  letter-spacing: 1px;
+}
+.login-input:focus{ border-color: var(--cor-brasa); }
+.login-btn{
+  width: 100%;
+  background: var(--cor-brasa);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 13px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+.login-btn:hover{ background: var(--cor-brasa-clara); }
+.login-erro{
+  color: var(--cor-brasa-clara);
+  font-size: 13px;
+  margin-top: 12px;
+  min-height: 16px;
+}
+
+/* ===== PAINEL ===== */
+.painel{ display: none; padding-bottom: 80px; }
+.painel.ativo{ display: block; }
+
+.topo{
+  background: var(--cor-fundo-alt);
+  border-bottom: 1px solid var(--cor-card-borda);
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.topo h1{
+  font-family: var(--fonte-display);
+  font-size: 18px;
+  letter-spacing: 0.5px;
+}
+.topo h1 span{ color: var(--cor-brasa-clara); }
+.btn-sair{
+  background: none;
+  border: 1px solid var(--cor-card-borda);
+  color: var(--cor-creme-fraco);
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.btn-sair:hover{ border-color: var(--cor-brasa); color: var(--cor-creme); }
+
+.conteudo{ padding: 20px; max-width: 720px; margin: 0 auto; }
+
+.abas{
+  display: flex;
+  gap: 6px;
+  margin-bottom: 20px;
+  background: var(--cor-fundo-alt);
+  padding: 4px;
+  border-radius: 10px;
+}
+.aba-btn{
+  flex: 1;
+  background: none;
+  border: none;
+  color: var(--cor-creme-fraco);
+  padding: 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.aba-btn.ativa{ background: var(--cor-brasa); color: #fff; }
+
+.aba-conteudo{ display: none; }
+.aba-conteudo.ativa{ display: block; }
+
+.status-msg{
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  margin-bottom: 16px;
+  display: none;
+}
+.status-msg.sucesso{ background: rgba(74,124,89,0.2); border: 1px solid var(--cor-verde); color: #9fd4ac; display: block; }
+.status-msg.erro{ background: rgba(197,64,43,0.15); border: 1px solid var(--cor-brasa); color: var(--cor-brasa-clara); display: block; }
+
+.categoria-bloco{ margin-bottom: 28px; }
+.categoria-titulo{
+  font-family: var(--fonte-display);
+  font-size: 15px;
+  color: var(--cor-dourado);
+  letter-spacing: 0.5px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--cor-card-borda);
+}
+
+.item-card{
+  background: var(--cor-card);
+  border: 1px solid var(--cor-card-borda);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 12px;
+  transition: opacity 0.2s ease;
+}
+.item-card.indisponivel{ opacity: 0.5; }
+
+.campo-grupo{ margin-bottom: 10px; }
+.campo-label{
+  font-size: 11px;
+  color: var(--cor-creme-fraco);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 5px;
+  display: block;
+}
+.campo-input, .campo-textarea{
+  width: 100%;
+  background: var(--cor-fundo-alt);
+  border: 1px solid var(--cor-card-borda);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: var(--cor-creme);
+  font-family: var(--fonte-corpo);
+  font-size: 14px;
+  outline: none;
+}
+.campo-textarea{ resize: vertical; min-height: 44px; }
+.campo-input:focus, .campo-textarea:focus{ border-color: var(--cor-brasa); }
+
+.campo-linha{ display: flex; gap: 10px; }
+.campo-linha > div{ flex: 1; }
+
+.item-rodape{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--cor-card-borda);
+}
+
+.toggle-disponivel{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--cor-creme-fraco);
+  cursor: pointer;
+}
+.toggle-switch{
+  width: 38px;
+  height: 22px;
+  background: var(--cor-card-borda);
+  border-radius: 11px;
+  position: relative;
+  transition: background 0.2s ease;
+}
+.toggle-switch.on{ background: var(--cor-verde); }
+.toggle-switch::after{
+  content: '';
+  position: absolute;
+  top: 2px; left: 2px;
+  width: 18px; height: 18px;
+  background: #fff;
+  border-radius: 50%;
+  transition: left 0.2s ease;
+}
+.toggle-switch.on::after{ left: 18px; }
+
+.item-acoes{ display: flex; gap: 8px; }
+.btn-salvar-item{
+  background: var(--cor-verde);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn-remover-item{
+  background: none;
+  border: 1px solid var(--cor-brasa);
+  color: var(--cor-brasa-clara);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.btn-add-item{
+  width: 100%;
+  background: var(--cor-fundo-alt);
+  border: 1.5px dashed var(--cor-card-borda);
+  color: var(--cor-creme-fraco);
+  border-radius: 12px;
+  padding: 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 8px;
+}
+.btn-add-item:hover{ border-color: var(--cor-brasa); color: var(--cor-creme); }
+
+/* ===== ABA CONFIG ===== */
+.config-card{
+  background: var(--cor-card);
+  border: 1px solid var(--cor-card-borda);
+  border-radius: 12px;
+  padding: 18px;
+  margin-bottom: 16px;
+}
+.config-card h3{
+  font-size: 13px;
+  color: var(--cor-dourado);
+  margin-bottom: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.btn-salvar-config{
+  width: 100%;
+  background: var(--cor-brasa);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 13px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 4px;
+}
+.btn-salvar-config:hover{ background: var(--cor-brasa-clara); }
+
+.loading{
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--cor-creme-fraco);
+  font-size: 14px;
+}
+
+@media(min-width:600px){
+  .conteudo{ padding: 28px 20px; }
+}
+
+</style>
+</head>
+<body>
+
+<!-- ===== TELA DE LOGIN ===== -->
+<div class="login-wrap" id="telaLogin">
+  <div class="login-card">
+    <h1>FH CARDÁPIO</h1>
+    <p>Painel administrativo — digite a senha de acesso</p>
+    <input type="password" class="login-input" id="inputSenha" placeholder="Senha" autocomplete="off">
+    <button class="login-btn" id="btnEntrar">Entrar</button>
+    <div class="login-erro" id="loginErro"></div>
+  </div>
+</div>
+
+<!-- ===== PAINEL ===== -->
+<div class="painel" id="telaPainel">
+  <div class="topo">
+    <h1>FH <span>CARDÁPIO</span></h1>
+    <button class="btn-sair" id="btnSair">Sair</button>
+  </div>
+
+  <div class="conteudo">
+    <div class="status-msg" id="statusMsg"></div>
+
+    <div class="abas">
+      <button class="aba-btn ativa" data-aba="itens">Cardápio</button>
+      <button class="aba-btn" data-aba="config">Configurações</button>
+    </div>
+
+    <div class="aba-conteudo ativa" id="abaItens">
+      <div class="loading" id="loadingItens">Carregando itens...</div>
+      <div id="listaCategorias"></div>
+      <button class="btn-add-item" id="btnAddItem">+ Adicionar novo item</button>
+    </div>
+
+    <div class="aba-conteudo" id="abaConfig">
+      <div class="config-card">
+        <h3>Dados da loja</h3>
+        <div class="campo-grupo">
+          <label class="campo-label">Nome da loja</label>
+          <input class="campo-input" id="cfgNome">
+        </div>
+        <div class="campo-grupo">
+          <label class="campo-label">Número do WhatsApp (formato 55DDDNÚMERO)</label>
+          <input class="campo-input" id="cfgWhatsapp" placeholder="5519999999999">
+        </div>
+      </div>
+
+      <div class="config-card">
+        <h3>Horário de funcionamento</h3>
+        <div class="campo-linha">
+          <div>
+            <label class="campo-label">Abre às</label>
+            <input class="campo-input" type="time" id="cfgAbertura">
+          </div>
+          <div>
+            <label class="campo-label">Fecha às</label>
+            <input class="campo-input" type="time" id="cfgFechamento">
+          </div>
+        </div>
+        <div style="margin-top:14px;">
+          <label class="toggle-disponivel" id="toggleAbertoManual">
+            <div class="toggle-switch" id="switchAbertoManual"></div>
+            <span>Loja aberta para pedidos (desligue para pausar manualmente, ex: feriado)</span>
+          </label>
+        </div>
+      </div>
+
+      <button class="btn-salvar-config" id="btnSalvarConfig">Salvar configurações</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================
+   CONFIGURAÇÃO — mesma do cardápio principal
+   ============================================ */
+const SUPABASE_URL = "https://ahpdonsxsdxttmngimwd.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_f05x9dkPvuhJMN_ZWipgbw_-l-SWdp4";
+const SLUG_LOJA = "brasa-cia";
+
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let itensCache = [];
+let configCache = null;
+
+/* ============================================
+   LOGIN
+   ============================================ */
+function jaAutenticado(){
+  return sessionStorage.getItem("fhcardapio_auth_" + SLUG_LOJA) === "ok";
+}
+
+async function tentarLogin(){
+  const senha = document.getElementById("inputSenha").value.trim();
+  const erroEl = document.getElementById("loginErro");
+  erroEl.textContent = "";
+
+  if(!senha){ erroEl.textContent = "Digite a senha."; return; }
+
+  try {
+    const { data, error } = await supabaseClient
+      .from("lojas_config")
+      .select("senha_painel")
+      .eq("slug_loja", SLUG_LOJA)
+      .single();
+
+    if(error || !data){
+      erroEl.textContent = "Não foi possível verificar a senha. Tente novamente.";
+      return;
+    }
+
+    if(senha === data.senha_painel){
+      sessionStorage.setItem("fhcardapio_auth_" + SLUG_LOJA, "ok");
+      mostrarPainel();
+    } else {
+      erroEl.textContent = "Senha incorreta.";
+    }
+  } catch(e){
+    erroEl.textContent = "Erro de conexão. Verifique sua internet.";
+  }
+}
+
+document.getElementById("btnEntrar").onclick = tentarLogin;
+document.getElementById("inputSenha").addEventListener("keydown", (e) => {
+  if(e.key === "Enter") tentarLogin();
+});
+
+document.getElementById("btnSair").onclick = () => {
+  sessionStorage.removeItem("fhcardapio_auth_" + SLUG_LOJA);
+  document.getElementById("telaPainel").classList.remove("ativo");
+  document.getElementById("telaLogin").style.display = "flex";
+};
+
+function mostrarPainel(){
+  document.getElementById("telaLogin").style.display = "none";
+  document.getElementById("telaPainel").classList.add("ativo");
+  carregarTudo();
+}
+
+/* ============================================
+   ABAS
+   ============================================ */
+document.querySelectorAll(".aba-btn").forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll(".aba-btn").forEach(b => b.classList.remove("ativa"));
+    document.querySelectorAll(".aba-conteudo").forEach(a => a.classList.remove("ativa"));
+    btn.classList.add("ativa");
+    document.getElementById("aba" + (btn.dataset.aba === "itens" ? "Itens" : "Config")).classList.add("ativa");
+  };
+});
+
+/* ============================================
+   MENSAGENS DE STATUS
+   ============================================ */
+function mostrarStatus(msg, tipo){
+  const el = document.getElementById("statusMsg");
+  el.textContent = msg;
+  el.className = "status-msg " + tipo;
+  window.scrollTo({top:0, behavior:"smooth"});
+  setTimeout(() => { el.className = "status-msg"; }, 4000);
+}
+
+/* ============================================
+   CARREGAMENTO
+   ============================================ */
+async function carregarTudo(){
+  await Promise.all([carregarItens(), carregarConfig()]);
+}
+
+async function carregarItens(){
+  document.getElementById("loadingItens").style.display = "block";
+  try {
+    const { data, error } = await supabaseClient
+      .from("cardapio_itens")
+      .select("*")
+      .eq("slug_loja", SLUG_LOJA)
+      .order("ordem_categoria", { ascending: true })
+      .order("ordem", { ascending: true });
+
+    if(error) throw error;
+    itensCache = data || [];
+    renderizarItens();
+  } catch(e){
+    mostrarStatus("Erro ao carregar itens: " + e.message, "erro");
+  }
+  document.getElementById("loadingItens").style.display = "none";
+}
+
+async function carregarConfig(){
+  try {
+    const { data, error } = await supabaseClient
+      .from("lojas_config")
+      .select("*")
+      .eq("slug_loja", SLUG_LOJA)
+      .single();
+
+    if(error) throw error;
+    configCache = data;
+
+    document.getElementById("cfgNome").value = data.nome_loja || "";
+    document.getElementById("cfgWhatsapp").value = data.numero_whatsapp || "";
+    document.getElementById("cfgAbertura").value = (data.horario_abertura || "00:00").slice(0,5);
+    document.getElementById("cfgFechamento").value = (data.horario_fechamento || "23:59").slice(0,5);
+
+    const sw = document.getElementById("switchAbertoManual");
+    sw.classList.toggle("on", data.aberto_manual !== false);
+  } catch(e){
+    mostrarStatus("Erro ao carregar configurações: " + e.message, "erro");
+  }
+}
+
+document.getElementById("toggleAbertoManual").onclick = () => {
+  document.getElementById("switchAbertoManual").classList.toggle("on");
+};
+
+/* ============================================
+   RENDERIZAÇÃO DOS ITENS
+   ============================================ */
+function renderizarItens(){
+  const container = document.getElementById("listaCategorias");
+  container.innerHTML = "";
+
+  const porCategoria = {};
+  const ordemCategorias = [];
+  itensCache.forEach(item => {
+    if(!porCategoria[item.categoria]){
+      porCategoria[item.categoria] = [];
+      ordemCategorias.push(item.categoria);
+    }
+    porCategoria[item.categoria].push(item);
+  });
+
+  if(ordemCategorias.length === 0){
+    container.innerHTML = `<p style="color:var(--cor-creme-fraco); font-size:13px; text-align:center; padding:20px;">Nenhum item cadastrado ainda. Adicione o primeiro abaixo.</p>`;
+    return;
+  }
+
+  ordemCategorias.forEach(cat => {
+    const bloco = document.createElement("div");
+    bloco.className = "categoria-bloco";
+    bloco.innerHTML = `<div class="categoria-titulo">${cat}</div>`;
+
+    porCategoria[cat].forEach(item => {
+      bloco.appendChild(criarCardItem(item));
+    });
+
+    container.appendChild(bloco);
+  });
+}
+
+function criarCardItem(item){
+  const card = document.createElement("div");
+  card.className = "item-card" + (item.disponivel === false ? " indisponivel" : "");
+  card.dataset.id = item.id;
+
+  card.innerHTML = `
+    <div class="campo-grupo">
+      <label class="campo-label">Categoria</label>
+      <input class="campo-input campo-categoria" value="${item.categoria || ""}">
+    </div>
+    <div class="campo-grupo">
+      <label class="campo-label">Nome do item</label>
+      <input class="campo-input campo-nome" value="${item.nome || ""}">
+    </div>
+    <div class="campo-grupo">
+      <label class="campo-label">Descrição</label>
+      <textarea class="campo-textarea campo-descricao">${item.descricao || ""}</textarea>
+    </div>
+    <div class="campo-linha">
+      <div class="campo-grupo">
+        <label class="campo-label">Preço (R$)</label>
+        <input class="campo-input campo-preco" type="number" step="0.01" value="${item.preco || 0}">
+      </div>
+      <div class="campo-grupo">
+        <label class="campo-label">URL da imagem</label>
+        <input class="campo-input campo-imagem" value="${item.imagem_url || ""}">
+      </div>
+    </div>
+    <div class="item-rodape">
+      <label class="toggle-disponivel">
+        <div class="toggle-switch ${item.disponivel !== false ? 'on' : ''}" data-toggle-disponivel></div>
+        <span>Disponível no cardápio</span>
+      </label>
+      <div class="item-acoes">
+        <button class="btn-remover-item" data-acao="remover">Remover</button>
+        <button class="btn-salvar-item" data-acao="salvar">Salvar</button>
+      </div>
+    </div>
+  `;
+
+  card.querySelector("[data-toggle-disponivel]").onclick = (e) => {
+    e.target.classList.toggle("on");
+  };
+
+  card.querySelector('[data-acao="salvar"]').onclick = () => salvarItem(card, item.id);
+  card.querySelector('[data-acao="remover"]').onclick = () => removerItem(card, item.id, item.nome);
+
+  return card;
+}
+
+async function salvarItem(card, id){
+  const payload = {
+    categoria: card.querySelector(".campo-categoria").value.trim(),
+    nome: card.querySelector(".campo-nome").value.trim(),
+    descricao: card.querySelector(".campo-descricao").value.trim(),
+    preco: parseFloat(card.querySelector(".campo-preco").value) || 0,
+    imagem_url: card.querySelector(".campo-imagem").value.trim(),
+    disponivel: card.querySelector("[data-toggle-disponivel]").classList.contains("on")
+  };
+
+  if(!payload.nome || !payload.categoria){
+    mostrarStatus("Nome e categoria são obrigatórios.", "erro");
+    return;
+  }
+
+  try {
+    const { error } = await supabaseClient
+      .from("cardapio_itens")
+      .update(payload)
+      .eq("id", id);
+
+    if(error) throw error;
+    mostrarStatus(`"${payload.nome}" foi salvo com sucesso.`, "sucesso");
+    await carregarItens();
+  } catch(e){
+    mostrarStatus("Erro ao salvar: " + e.message, "erro");
+  }
+}
+
+async function removerItem(card, id, nome){
+  if(!confirm(`Remover "${nome}" do cardápio? Essa ação não pode ser desfeita.`)) return;
+
+  try {
+    const { error } = await supabaseClient
+      .from("cardapio_itens")
+      .delete()
+      .eq("id", id);
+
+    if(error) throw error;
+    mostrarStatus(`"${nome}" foi removido.`, "sucesso");
+    await carregarItens();
+  } catch(e){
+    mostrarStatus("Erro ao remover: " + e.message, "erro");
+  }
+}
+
+/* ============================================
+   ADICIONAR NOVO ITEM
+   ============================================ */
+document.getElementById("btnAddItem").onclick = async () => {
+  const categoriaExistente = itensCache.length > 0 ? itensCache[itensCache.length - 1].categoria : "Geral";
+  const maxOrdemCategoria = itensCache.reduce((max, i) => Math.max(max, i.ordem_categoria || 0), 0);
+
+  try {
+    const { data, error } = await supabaseClient
+      .from("cardapio_itens")
+      .insert({
+        slug_loja: SLUG_LOJA,
+        categoria: categoriaExistente,
+        ordem_categoria: maxOrdemCategoria,
+        nome: "Novo item",
+        descricao: "",
+        preco: 0,
+        imagem_url: "",
+        disponivel: true,
+        ordem: itensCache.length + 1
+      })
+      .select()
+      .single();
+
+    if(error) throw error;
+    mostrarStatus("Novo item criado. Edite os campos abaixo e clique em Salvar.", "sucesso");
+    await carregarItens();
+
+    setTimeout(() => {
+      const novoCard = document.querySelector(`[data-id="${data.id}"]`);
+      if(novoCard) novoCard.scrollIntoView({behavior:"smooth", block:"center"});
+    }, 200);
+  } catch(e){
+    mostrarStatus("Erro ao criar item: " + e.message, "erro");
+  }
+};
+
+/* ============================================
+   SALVAR CONFIGURAÇÕES
+   ============================================ */
+document.getElementById("btnSalvarConfig").onclick = async () => {
+  const payload = {
+    nome_loja: document.getElementById("cfgNome").value.trim(),
+    numero_whatsapp: document.getElementById("cfgWhatsapp").value.trim(),
+    horario_abertura: document.getElementById("cfgAbertura").value,
+    horario_fechamento: document.getElementById("cfgFechamento").value,
+    aberto_manual: document.getElementById("switchAbertoManual").classList.contains("on")
+  };
+
+  if(!/^\d{10,13}$/.test(payload.numero_whatsapp)){
+    mostrarStatus("Número de WhatsApp inválido. Use só números, formato 55DDDNÚMERO.", "erro");
+    return;
+  }
+
+  try {
+    const { error } = await supabaseClient
+      .from("lojas_config")
+      .update(payload)
+      .eq("slug_loja", SLUG_LOJA);
+
+    if(error) throw error;
+    mostrarStatus("Configurações salvas com sucesso.", "sucesso");
+  } catch(e){
+    mostrarStatus("Erro ao salvar configurações: " + e.message, "erro");
+  }
+};
+
+/* ============================================
+   BOOT
+   ============================================ */
+if(jaAutenticado()){
+  mostrarPainel();
+}
+</script>
+
+</body>
+</html>
