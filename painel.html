@@ -418,7 +418,6 @@ body{
     <div class="aba-conteudo ativa" id="abaItens">
       <div class="loading" id="loadingItens">Carregando itens...</div>
       <div id="listaCategorias"></div>
-      <button class="btn-add-item" id="btnAddItem">+ Adicionar novo item</button>
     </div>
 
     <div class="aba-conteudo" id="abaCategorias">
@@ -655,20 +654,27 @@ function renderizarItens(){
     }
   });
 
-  if(itensCache.length === 0){
-    container.innerHTML = `<p style="color:var(--cor-creme-fraco); font-size:13px; text-align:center; padding:20px;">Nenhum item cadastrado ainda. Adicione o primeiro abaixo.</p>`;
-    return;
-  }
-
   categoriasCache.forEach(cat => {
-    if(porCategoria[cat.id].length === 0) return;
     const bloco = document.createElement("div");
     bloco.className = "categoria-bloco";
     bloco.innerHTML = `<div class="categoria-titulo">${cat.nome}</div>`;
 
-    porCategoria[cat.id].forEach(item => {
-      bloco.appendChild(criarCardItem(item));
-    });
+    if(porCategoria[cat.id].length === 0){
+      const vazio = document.createElement("p");
+      vazio.style.cssText = "color:var(--cor-creme-fraco); font-size:13px; padding:4px 0 12px;";
+      vazio.textContent = "Nenhum item nesta categoria ainda.";
+      bloco.appendChild(vazio);
+    } else {
+      porCategoria[cat.id].forEach(item => {
+        bloco.appendChild(criarCardItem(item));
+      });
+    }
+
+    const btnAdd = document.createElement("button");
+    btnAdd.className = "btn-add-item";
+    btnAdd.textContent = `+ Adicionar item em "${cat.nome}"`;
+    btnAdd.onclick = () => criarNovoItem(cat.id);
+    bloco.appendChild(btnAdd);
 
     container.appendChild(bloco);
   });
@@ -785,22 +791,13 @@ async function removerItem(card, id, nome){
 /* ============================================
    ADICIONAR NOVO ITEM
    ============================================ */
-document.getElementById("btnAddItem").onclick = async () => {
-  if(categoriasCache.length === 0){
-    mostrarStatus("Crie uma categoria primeiro, na aba \"Categorias\".", "erro");
-    return;
-  }
-
-  const categoriaPadrao = itensCache.length > 0
-    ? itensCache[itensCache.length - 1].categoria_id
-    : categoriasCache[0].id;
-
+async function criarNovoItem(categoriaId){
   try {
     const { data, error } = await supabaseClient
       .from("cardapio_itens")
       .insert({
         slug_loja: SLUG_LOJA,
-        categoria_id: categoriaPadrao,
+        categoria_id: categoriaId,
         nome: "Novo item",
         descricao: "",
         preco: 0,
@@ -822,7 +819,7 @@ document.getElementById("btnAddItem").onclick = async () => {
   } catch(e){
     mostrarStatus("Erro ao criar item: " + e.message, "erro");
   }
-};
+}
 
 /* ============================================
    GERENCIAMENTO DE CATEGORIAS
