@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 
 /* ============================================
@@ -659,43 +660,61 @@ body{
 
 <script>
 /* ============================================
-   DADOS DO CARDÁPIO — troque aqui pra outro cliente
+   CONFIGURAÇÃO SUPABASE — troque aqui pra outro cliente
    ============================================ */
-const NUMERO_WHATSAPP = "5519999999999"; // formato: 55 + DDD + número, sem espaços ou símbolos
-const CHAVE_PIX = "contato@brasaecia.com.br"; // pode ser e-mail, CPF/CNPJ, telefone ou chave aleatória
-const NOME_PIX = "Brasa & Cia Lanches"; // nome do titular que aparece no Pix
+const SUPABASE_URL = "https://ahpdonsxsdxttmngimwd.supabase.co"; // ex: https://xxxxx.supabase.co
+const SUPABASE_ANON_KEY = "sb_publishable_f05x9dkPvuhJMN_ZWipgbw_-l-SWdp4";
+const SLUG_LOJA = "brasa-cia"; // identifica qual loja buscar no banco — troque por cliente
 
-const cardapio = [
+let supabaseClient = null;
+try {
+  if(SUPABASE_URL.startsWith("http")){
+    supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  }
+} catch(e){ console.warn("Supabase não configurado, usando dados fixos.", e); }
+
+/* ============================================
+   DADOS PADRÃO (fallback) — usados se o Supabase não estiver configurado
+   ou se a busca falhar. Troque aqui pra outro cliente caso não use banco.
+   ============================================ */
+let NUMERO_WHATSAPP = "5519999999999"; // formato: 55 + DDD + número, sem espaços ou símbolos
+let CHAVE_PIX = "contato@brasaecia.com.br"; // pode ser e-mail, CPF/CNPJ, telefone ou chave aleatória
+let NOME_PIX = "Brasa & Cia Lanches"; // nome do titular que aparece no Pix
+let HORARIO_ABERTURA = "00:00";
+let HORARIO_FECHAMENTO = "23:59";
+let LOJA_ABERTA_MANUAL = true;
+
+let cardapio = [
   {
     categoria: "Burgers",
     itens: [
       {
         id: "b1",
         nome: "Brasa Clássico",
-        desc: "Blend 160g, queijo cheddar, alface, tomate, cebola caramelizada e maionese da casa.",
+        descricao: "Blend 160g, queijo cheddar, alface, tomate, cebola caramelizada e maionese da casa.",
         preco: 28.90,
-        img: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=200&h=200&fit=crop"
+        imagem_url: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=200&h=200&fit=crop"
       },
       {
         id: "b2",
         nome: "Duplo Bacon",
-        desc: "Dois blends 120g, bacon crocante, queijo prato dobrado e barbecue artesanal.",
+        descricao: "Dois blends 120g, bacon crocante, queijo prato dobrado e barbecue artesanal.",
         preco: 34.90,
-        img: "https://images.unsplash.com/photo-1553979459-d2229ba7433b?w=200&h=200&fit=crop"
+        imagem_url: "https://images.unsplash.com/photo-1553979459-d2229ba7433b?w=200&h=200&fit=crop"
       },
       {
         id: "b3",
         nome: "Frango Crispy",
-        desc: "Peito de frango empanado crocante, maionese de alho e picles caseiro.",
+        descricao: "Peito de frango empanado crocante, maionese de alho e picles caseiro.",
         preco: 26.90,
-        img: "https://images.unsplash.com/photo-1606755962773-d324e0a13086?w=200&h=200&fit=crop"
+        imagem_url: "https://images.unsplash.com/photo-1606755962773-d324e0a13086?w=200&h=200&fit=crop"
       },
       {
         id: "b4",
         nome: "Veggie Grelhado",
-        desc: "Hambúrguer de grão-de-bico e cogumelos, rúcula e maionese de ervas.",
+        descricao: "Hambúrguer de grão-de-bico e cogumelos, rúcula e maionese de ervas.",
         preco: 27.90,
-        img: "https://images.unsplash.com/photo-1525059696034-4967a729002e?w=200&h=200&fit=crop"
+        imagem_url: "https://images.unsplash.com/photo-1525059696034-4967a729002e?w=200&h=200&fit=crop"
       }
     ]
   },
@@ -705,16 +724,16 @@ const cardapio = [
       {
         id: "p1",
         nome: "Batata Frita Brasa",
-        desc: "Porção generosa, crocante por fora, com tempero da casa.",
+        descricao: "Porção generosa, crocante por fora, com tempero da casa.",
         preco: 18.90,
-        img: "https://images.unsplash.com/photo-1576107232684-1279f390859f?w=200&h=200&fit=crop"
+        imagem_url: "https://images.unsplash.com/photo-1576107232684-1279f390859f?w=200&h=200&fit=crop"
       },
       {
         id: "p2",
         nome: "Onion Rings",
-        desc: "Anéis de cebola empanados, servidos com molho barbecue.",
+        descricao: "Anéis de cebola empanados, servidos com molho barbecue.",
         preco: 21.90,
-        img: "https://images.unsplash.com/photo-1639024471283-03518883512d?w=200&h=200&fit=crop"
+        imagem_url: "https://images.unsplash.com/photo-1639024471283-03518883512d?w=200&h=200&fit=crop"
       }
     ]
   },
@@ -724,16 +743,16 @@ const cardapio = [
       {
         id: "d1",
         nome: "Refrigerante Lata",
-        desc: "Coca-Cola, Guaraná ou Sprite — 350ml.",
+        descricao: "Coca-Cola, Guaraná ou Sprite — 350ml.",
         preco: 6.50,
-        img: "https://images.unsplash.com/photo-1622483767028-3f66f32aef97?w=200&h=200&fit=crop"
+        imagem_url: "https://images.unsplash.com/photo-1622483767028-3f66f32aef97?w=200&h=200&fit=crop"
       },
       {
         id: "d2",
         nome: "Limonada Suíça",
-        desc: "Feita na hora, com leite condensado — 400ml.",
+        descricao: "Feita na hora, com leite condensado — 400ml.",
         preco: 9.90,
-        img: "https://images.unsplash.com/photo-1621263764928-df1444c5e859?w=200&h=200&fit=crop"
+        imagem_url: "https://images.unsplash.com/photo-1621263764928-df1444c5e859?w=200&h=200&fit=crop"
       }
     ]
   }
@@ -802,10 +821,10 @@ function renderizarCardapio(){
       const div = document.createElement("div");
       div.className = "produto";
       div.innerHTML = `
-        <img class="produto-img" src="${item.img}" alt="${item.nome}" onerror="this.style.display='none'">
+        <img class="produto-img" src="${item.imagem_url}" alt="${item.nome}" onerror="this.style.display='none'">
         <div class="produto-info">
           <div class="produto-nome">${item.nome}</div>
-          <div class="produto-desc">${item.desc}</div>
+          <div class="produto-desc">${item.descricao}</div>
           <div class="produto-rodape">
             <span class="produto-preco">${formatarPreco(item.preco)}</span>
             <div class="control-wrap" data-id="${item.id}"></div>
@@ -1221,6 +1240,10 @@ function montarMensagemWhatsApp(){
 
 function enviarPedidoWhatsApp(){
   if(totalItens() === 0) return;
+  if(!lojaEstaAberta()){
+    alert(`Estamos fechados no momento.\nHorário de funcionamento: ${HORARIO_ABERTURA} às ${HORARIO_FECHAMENTO}.`);
+    return;
+  }
   const texto = montarMensagemWhatsApp();
   window.open(`https://wa.me/${NUMERO_WHATSAPP}?text=${texto}`, "_blank");
   fecharModalCarrinho();
@@ -1241,7 +1264,112 @@ function fecharModalCarrinho(){
 document.getElementById("fecharModal").onclick = fecharModalCarrinho;
 document.getElementById("overlay").onclick = fecharModalCarrinho;
 
-renderizarCardapio();
+/* ============================================
+   CARREGAMENTO DE DADOS (Supabase com fallback pros dados fixos acima)
+   ============================================ */
+async function carregarDadosDaLoja(){
+  if(!supabaseClient) return; // sem configuração — usa os dados fixos já definidos
+
+  try {
+    const { data: config, error: errConfig } = await supabaseClient
+      .from("lojas_config")
+      .select("*")
+      .eq("slug_loja", SLUG_LOJA)
+      .single();
+
+    if(errConfig) throw errConfig;
+    if(config){
+      NUMERO_WHATSAPP = config.numero_whatsapp || NUMERO_WHATSAPP;
+      HORARIO_ABERTURA = config.horario_abertura || HORARIO_ABERTURA;
+      HORARIO_FECHAMENTO = config.horario_fechamento || HORARIO_FECHAMENTO;
+      LOJA_ABERTA_MANUAL = config.aberto_manual !== false;
+    }
+
+    const { data: itens, error: errItens } = await supabaseClient
+      .from("cardapio_itens")
+      .select("*")
+      .eq("slug_loja", SLUG_LOJA)
+      .eq("disponivel", true)
+      .order("ordem_categoria", { ascending: true })
+      .order("ordem", { ascending: true });
+
+    if(errItens) throw errItens;
+
+    if(itens && itens.length > 0){
+      const porCategoria = {};
+      const ordemCategorias = [];
+      itens.forEach(item => {
+        if(!porCategoria[item.categoria]){
+          porCategoria[item.categoria] = [];
+          ordemCategorias.push(item.categoria);
+        }
+        porCategoria[item.categoria].push({
+          id: item.id,
+          nome: item.nome,
+          descricao: item.descricao,
+          preco: parseFloat(item.preco),
+          imagem_url: item.imagem_url
+        });
+      });
+      cardapio = ordemCategorias.map(cat => ({ categoria: cat, itens: porCategoria[cat] }));
+    }
+  } catch(e){
+    console.warn("Falha ao buscar dados do Supabase, usando dados fixos como fallback.", e);
+  }
+}
+
+/* ============================================
+   VERIFICAÇÃO DE HORÁRIO DE FUNCIONAMENTO
+   ============================================ */
+function lojaEstaAberta(){
+  if(!LOJA_ABERTA_MANUAL) return false;
+
+  const agora = new Date();
+  const horaAtual = agora.getHours() * 60 + agora.getMinutes();
+
+  const [hA, mA] = HORARIO_ABERTURA.split(":").map(Number);
+  const [hF, mF] = HORARIO_FECHAMENTO.split(":").map(Number);
+  const minutosAbertura = hA * 60 + mA;
+  const minutosFechamento = hF * 60 + mF;
+
+  // Funcionamento que cruza a meia-noite (ex: 18:00 às 02:00)
+  if(minutosFechamento < minutosAbertura){
+    return horaAtual >= minutosAbertura || horaAtual < minutosFechamento;
+  }
+  return horaAtual >= minutosAbertura && horaAtual < minutosFechamento;
+}
+
+function aplicarEstadoAberto(){
+  const aberto = lojaEstaAberta();
+  const elEyebrow = document.querySelector(".hero-eyebrow");
+  const btnCarrinho = document.getElementById("carrinhoFlutuante");
+
+  if(!aberto){
+    if(elEyebrow){
+      elEyebrow.textContent = "Fechado agora";
+      elEyebrow.style.color = "#c0392b";
+    }
+    let avisoFechado = document.getElementById("avisoFechado");
+    if(!avisoFechado){
+      avisoFechado = document.createElement("div");
+      avisoFechado.id = "avisoFechado";
+      avisoFechado.className = "aviso-demo";
+      avisoFechado.style.background = "rgba(192,57,43,0.15)";
+      avisoFechado.style.borderColor = "#c0392b";
+      avisoFechado.innerHTML = `🕒 Estamos fechados no momento. Horário de funcionamento: ${HORARIO_ABERTURA} às ${HORARIO_FECHAMENTO}.`;
+      document.getElementById("categorias").insertAdjacentElement("beforebegin", avisoFechado);
+    }
+    if(btnCarrinho) btnCarrinho.style.display = "none";
+  }
+}
+
+async function iniciar(){
+  await carregarDadosDaLoja();
+  renderizarCardapio();
+  aplicarEstadoAberto();
+}
+
+iniciar();
 </script>
 
 
