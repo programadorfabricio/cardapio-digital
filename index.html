@@ -1317,33 +1317,38 @@ async function carregarDadosDaLoja(){
       LOJA_ABERTA_MANUAL = config.aberto_manual !== false;
     }
 
+    const { data: categorias, error: errCategorias } = await supabaseClient
+      .from("cardapio_categorias")
+      .select("*")
+      .eq("slug_loja", SLUG_LOJA)
+      .order("ordem", { ascending: true });
+
+    if(errCategorias) throw errCategorias;
+
     const { data: itens, error: errItens } = await supabaseClient
       .from("cardapio_itens")
       .select("*")
       .eq("slug_loja", SLUG_LOJA)
       .eq("disponivel", true)
-      .order("ordem_categoria", { ascending: true })
       .order("ordem", { ascending: true });
 
     if(errItens) throw errItens;
 
-    if(itens && itens.length > 0){
-      const porCategoria = {};
-      const ordemCategorias = [];
-      itens.forEach(item => {
-        if(!porCategoria[item.categoria]){
-          porCategoria[item.categoria] = [];
-          ordemCategorias.push(item.categoria);
-        }
-        porCategoria[item.categoria].push({
-          id: item.id,
-          nome: item.nome,
-          descricao: item.descricao,
-          preco: parseFloat(item.preco),
-          imagem_url: item.imagem_url
-        });
-      });
-      cardapio = ordemCategorias.map(cat => ({ categoria: cat, itens: porCategoria[cat] }));
+    if(categorias && categorias.length > 0 && itens){
+      const novoCardapio = categorias.map(cat => ({
+        categoria: cat.nome,
+        itens: itens
+          .filter(item => item.categoria_id === cat.id)
+          .map(item => ({
+            id: item.id,
+            nome: item.nome,
+            descricao: item.descricao,
+            preco: parseFloat(item.preco),
+            imagem_url: item.imagem_url
+          }))
+      })).filter(cat => cat.itens.length > 0); // não mostra categoria vazia pro cliente
+
+      if(novoCardapio.length > 0) cardapio = novoCardapio;
     }
   } catch(e){
     console.warn("Falha ao buscar dados do Supabase, usando dados fixos como fallback.", e);

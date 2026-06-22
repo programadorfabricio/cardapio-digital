@@ -285,6 +285,65 @@ body{
 }
 .btn-add-item:hover{ border-color: var(--cor-brasa); color: var(--cor-creme); }
 
+/* ===== CATEGORIAS ===== */
+.categoria-item{
+  background: var(--cor-card);
+  border: 1px solid var(--cor-card-borda);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.categoria-item input{
+  flex: 1;
+  background: var(--cor-fundo-alt);
+  border: 1px solid var(--cor-card-borda);
+  border-radius: 8px;
+  padding: 9px 11px;
+  color: var(--cor-creme);
+  font-family: var(--fonte-corpo);
+  font-size: 14px;
+  outline: none;
+}
+.categoria-item input:focus{ border-color: var(--cor-brasa); }
+.categoria-contador{
+  font-size: 11px;
+  color: var(--cor-creme-fraco);
+  white-space: nowrap;
+  min-width: 56px;
+  text-align: right;
+}
+.categoria-acoes{ display: flex; gap: 4px; }
+.btn-icone{
+  background: var(--cor-fundo-alt);
+  border: 1px solid var(--cor-card-borda);
+  color: var(--cor-creme-fraco);
+  border-radius: 7px;
+  width: 30px;
+  height: 30px;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.btn-icone:hover{ border-color: var(--cor-brasa); color: var(--cor-creme); }
+.btn-icone:disabled{ opacity: 0.3; cursor: not-allowed; }
+.btn-icone.remover:hover{ border-color: var(--cor-brasa); color: var(--cor-brasa-clara); }
+.btn-icone-salvar{
+  background: var(--cor-verde);
+  border: none;
+  color: #fff;
+}
+.dica-texto{
+  font-size: 12px;
+  color: var(--cor-creme-fraco);
+  margin-bottom: 14px;
+  line-height: 1.5;
+}
+
 /* ===== ABA CONFIG ===== */
 .config-card{
   background: var(--cor-card);
@@ -352,6 +411,7 @@ body{
 
     <div class="abas">
       <button class="aba-btn ativa" data-aba="itens">Cardápio</button>
+      <button class="aba-btn" data-aba="categorias">Categorias</button>
       <button class="aba-btn" data-aba="config">Configurações</button>
     </div>
 
@@ -359,6 +419,13 @@ body{
       <div class="loading" id="loadingItens">Carregando itens...</div>
       <div id="listaCategorias"></div>
       <button class="btn-add-item" id="btnAddItem">+ Adicionar novo item</button>
+    </div>
+
+    <div class="aba-conteudo" id="abaCategorias">
+      <p class="dica-texto">Organize as seções do seu cardápio (ex: Burgers, Bebidas, Doses). Use as setas para mudar a ordem em que aparecem para o cliente.</p>
+      <div class="loading" id="loadingCategorias">Carregando categorias...</div>
+      <div id="listaCategoriasGerenciar"></div>
+      <button class="btn-add-item" id="btnAddCategoria">+ Adicionar nova categoria</button>
     </div>
 
     <div class="aba-conteudo" id="abaConfig">
@@ -410,6 +477,7 @@ const SLUG_LOJA = "brasa-cia";
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let itensCache = [];
+let categoriasCache = [];
 let configCache = null;
 
 /* ============================================
@@ -474,7 +542,9 @@ document.querySelectorAll(".aba-btn").forEach(btn => {
     document.querySelectorAll(".aba-btn").forEach(b => b.classList.remove("ativa"));
     document.querySelectorAll(".aba-conteudo").forEach(a => a.classList.remove("ativa"));
     btn.classList.add("ativa");
-    document.getElementById("aba" + (btn.dataset.aba === "itens" ? "Itens" : "Config")).classList.add("ativa");
+    const nomeAba = btn.dataset.aba;
+    const idAba = "aba" + nomeAba.charAt(0).toUpperCase() + nomeAba.slice(1);
+    document.getElementById(idAba).classList.add("ativa");
   };
 });
 
@@ -493,7 +563,27 @@ function mostrarStatus(msg, tipo){
    CARREGAMENTO
    ============================================ */
 async function carregarTudo(){
-  await Promise.all([carregarItens(), carregarConfig()]);
+  await Promise.all([carregarCategorias(), carregarConfig()]);
+  await carregarItens();
+  renderizarCategorias(); // re-renderiza pra atualizar a contagem de itens por categoria
+}
+
+async function carregarCategorias(){
+  document.getElementById("loadingCategorias").style.display = "block";
+  try {
+    const { data, error } = await supabaseClient
+      .from("cardapio_categorias")
+      .select("*")
+      .eq("slug_loja", SLUG_LOJA)
+      .order("ordem", { ascending: true });
+
+    if(error) throw error;
+    categoriasCache = data || [];
+    renderizarCategorias();
+  } catch(e){
+    mostrarStatus("Erro ao carregar categorias: " + e.message, "erro");
+  }
+  document.getElementById("loadingCategorias").style.display = "none";
 }
 
 async function carregarItens(){
@@ -503,7 +593,6 @@ async function carregarItens(){
       .from("cardapio_itens")
       .select("*")
       .eq("slug_loja", SLUG_LOJA)
-      .order("ordem_categoria", { ascending: true })
       .order("ordem", { ascending: true });
 
     if(error) throw error;
@@ -549,32 +638,48 @@ function renderizarItens(){
   const container = document.getElementById("listaCategorias");
   container.innerHTML = "";
 
+  if(categoriasCache.length === 0){
+    container.innerHTML = `<p style="color:var(--cor-creme-fraco); font-size:13px; text-align:center; padding:20px;">Crie pelo menos uma categoria na aba "Categorias" antes de adicionar itens.</p>`;
+    return;
+  }
+
   const porCategoria = {};
-  const ordemCategorias = [];
+  categoriasCache.forEach(cat => { porCategoria[cat.id] = []; });
+
+  const semCategoria = [];
   itensCache.forEach(item => {
-    if(!porCategoria[item.categoria]){
-      porCategoria[item.categoria] = [];
-      ordemCategorias.push(item.categoria);
+    if(item.categoria_id && porCategoria[item.categoria_id]){
+      porCategoria[item.categoria_id].push(item);
+    } else {
+      semCategoria.push(item);
     }
-    porCategoria[item.categoria].push(item);
   });
 
-  if(ordemCategorias.length === 0){
+  if(itensCache.length === 0){
     container.innerHTML = `<p style="color:var(--cor-creme-fraco); font-size:13px; text-align:center; padding:20px;">Nenhum item cadastrado ainda. Adicione o primeiro abaixo.</p>`;
     return;
   }
 
-  ordemCategorias.forEach(cat => {
+  categoriasCache.forEach(cat => {
+    if(porCategoria[cat.id].length === 0) return;
     const bloco = document.createElement("div");
     bloco.className = "categoria-bloco";
-    bloco.innerHTML = `<div class="categoria-titulo">${cat}</div>`;
+    bloco.innerHTML = `<div class="categoria-titulo">${cat.nome}</div>`;
 
-    porCategoria[cat].forEach(item => {
+    porCategoria[cat.id].forEach(item => {
       bloco.appendChild(criarCardItem(item));
     });
 
     container.appendChild(bloco);
   });
+
+  if(semCategoria.length > 0){
+    const bloco = document.createElement("div");
+    bloco.className = "categoria-bloco";
+    bloco.innerHTML = `<div class="categoria-titulo">Sem categoria</div>`;
+    semCategoria.forEach(item => bloco.appendChild(criarCardItem(item)));
+    container.appendChild(bloco);
+  }
 }
 
 function criarCardItem(item){
@@ -582,10 +687,14 @@ function criarCardItem(item){
   card.className = "item-card" + (item.disponivel === false ? " indisponivel" : "");
   card.dataset.id = item.id;
 
+  const opcoesCategoria = categoriasCache.map(cat =>
+    `<option value="${cat.id}" ${item.categoria_id === cat.id ? "selected" : ""}>${cat.nome}</option>`
+  ).join("");
+
   card.innerHTML = `
     <div class="campo-grupo">
       <label class="campo-label">Categoria</label>
-      <input class="campo-input campo-categoria" value="${item.categoria || ""}">
+      <select class="campo-input campo-categoria">${opcoesCategoria}</select>
     </div>
     <div class="campo-grupo">
       <label class="campo-label">Nome do item</label>
@@ -629,7 +738,7 @@ function criarCardItem(item){
 
 async function salvarItem(card, id){
   const payload = {
-    categoria: card.querySelector(".campo-categoria").value.trim(),
+    categoria_id: card.querySelector(".campo-categoria").value || null,
     nome: card.querySelector(".campo-nome").value.trim(),
     descricao: card.querySelector(".campo-descricao").value.trim(),
     preco: parseFloat(card.querySelector(".campo-preco").value) || 0,
@@ -637,7 +746,7 @@ async function salvarItem(card, id){
     disponivel: card.querySelector("[data-toggle-disponivel]").classList.contains("on")
   };
 
-  if(!payload.nome || !payload.categoria){
+  if(!payload.nome || !payload.categoria_id){
     mostrarStatus("Nome e categoria são obrigatórios.", "erro");
     return;
   }
@@ -677,16 +786,21 @@ async function removerItem(card, id, nome){
    ADICIONAR NOVO ITEM
    ============================================ */
 document.getElementById("btnAddItem").onclick = async () => {
-  const categoriaExistente = itensCache.length > 0 ? itensCache[itensCache.length - 1].categoria : "Geral";
-  const maxOrdemCategoria = itensCache.reduce((max, i) => Math.max(max, i.ordem_categoria || 0), 0);
+  if(categoriasCache.length === 0){
+    mostrarStatus("Crie uma categoria primeiro, na aba \"Categorias\".", "erro");
+    return;
+  }
+
+  const categoriaPadrao = itensCache.length > 0
+    ? itensCache[itensCache.length - 1].categoria_id
+    : categoriasCache[0].id;
 
   try {
     const { data, error } = await supabaseClient
       .from("cardapio_itens")
       .insert({
         slug_loja: SLUG_LOJA,
-        categoria: categoriaExistente,
-        ordem_categoria: maxOrdemCategoria,
+        categoria_id: categoriaPadrao,
         nome: "Novo item",
         descricao: "",
         preco: 0,
@@ -709,6 +823,133 @@ document.getElementById("btnAddItem").onclick = async () => {
     mostrarStatus("Erro ao criar item: " + e.message, "erro");
   }
 };
+
+/* ============================================
+   GERENCIAMENTO DE CATEGORIAS
+   ============================================ */
+function renderizarCategorias(){
+  const container = document.getElementById("listaCategoriasGerenciar");
+  container.innerHTML = "";
+
+  if(categoriasCache.length === 0){
+    container.innerHTML = `<p style="color:var(--cor-creme-fraco); font-size:13px; text-align:center; padding:20px 0;">Nenhuma categoria ainda. Crie a primeira abaixo.</p>`;
+    return;
+  }
+
+  categoriasCache.forEach((cat, index) => {
+    const qtdItens = itensCache.filter(i => i.categoria_id === cat.id).length;
+
+    const linha = document.createElement("div");
+    linha.className = "categoria-item";
+    linha.innerHTML = `
+      <input type="text" value="${cat.nome}" data-id="${cat.id}">
+      <span class="categoria-contador">${qtdItens} ${qtdItens === 1 ? "item" : "itens"}</span>
+      <div class="categoria-acoes">
+        <button class="btn-icone" data-acao="subir" title="Mover para cima" ${index === 0 ? "disabled" : ""}>↑</button>
+        <button class="btn-icone" data-acao="descer" title="Mover para baixo" ${index === categoriasCache.length - 1 ? "disabled" : ""}>↓</button>
+        <button class="btn-icone btn-icone-salvar" data-acao="salvar" title="Salvar nome">✓</button>
+        <button class="btn-icone remover" data-acao="remover" title="Remover categoria">✕</button>
+      </div>
+    `;
+
+    linha.querySelector('[data-acao="salvar"]').onclick = () => salvarNomeCategoria(cat.id, linha.querySelector("input").value);
+    linha.querySelector('[data-acao="remover"]').onclick = () => removerCategoria(cat.id, cat.nome, qtdItens);
+    linha.querySelector('[data-acao="subir"]').onclick = () => moverCategoria(index, -1);
+    linha.querySelector('[data-acao="descer"]').onclick = () => moverCategoria(index, 1);
+
+    container.appendChild(linha);
+  });
+}
+
+document.getElementById("btnAddCategoria").onclick = async () => {
+  const maxOrdem = categoriasCache.reduce((max, c) => Math.max(max, c.ordem || 0), 0);
+
+  try {
+    const { error } = await supabaseClient
+      .from("cardapio_categorias")
+      .insert({
+        slug_loja: SLUG_LOJA,
+        nome: "Nova categoria",
+        ordem: maxOrdem + 1
+      });
+
+    if(error) throw error;
+    mostrarStatus("Categoria criada. Edite o nome abaixo.", "sucesso");
+    await carregarCategorias();
+  } catch(e){
+    mostrarStatus("Erro ao criar categoria: " + e.message, "erro");
+  }
+};
+
+async function salvarNomeCategoria(id, novoNome){
+  novoNome = novoNome.trim();
+  if(!novoNome){
+    mostrarStatus("O nome da categoria não pode ficar vazio.", "erro");
+    return;
+  }
+
+  try {
+    const { error } = await supabaseClient
+      .from("cardapio_categorias")
+      .update({ nome: novoNome })
+      .eq("id", id);
+
+    if(error) throw error;
+    mostrarStatus("Categoria salva.", "sucesso");
+    await carregarCategorias();
+    await carregarItens(); // os itens mostram o nome da categoria, então recarrega também
+  } catch(e){
+    mostrarStatus("Erro ao salvar categoria: " + e.message, "erro");
+  }
+}
+
+async function removerCategoria(id, nome, qtdItens){
+  if(qtdItens > 0){
+    mostrarStatus(`"${nome}" tem ${qtdItens} ${qtdItens === 1 ? "item" : "itens"} dentro. Mova ou remova esses itens antes de excluir a categoria.`, "erro");
+    return;
+  }
+
+  if(!confirm(`Remover a categoria "${nome}"? Essa ação não pode ser desfeita.`)) return;
+
+  try {
+    const { error } = await supabaseClient
+      .from("cardapio_categorias")
+      .delete()
+      .eq("id", id);
+
+    if(error) throw error;
+    mostrarStatus(`Categoria "${nome}" removida.`, "sucesso");
+    await carregarCategorias();
+  } catch(e){
+    mostrarStatus("Erro ao remover categoria: " + e.message, "erro");
+  }
+}
+
+async function moverCategoria(index, direcao){
+  const outroIndex = index + direcao;
+  if(outroIndex < 0 || outroIndex >= categoriasCache.length) return;
+
+  const catA = categoriasCache[index];
+  const catB = categoriasCache[outroIndex];
+
+  try {
+    const { error: erroA } = await supabaseClient
+      .from("cardapio_categorias")
+      .update({ ordem: catB.ordem })
+      .eq("id", catA.id);
+    if(erroA) throw erroA;
+
+    const { error: erroB } = await supabaseClient
+      .from("cardapio_categorias")
+      .update({ ordem: catA.ordem })
+      .eq("id", catB.id);
+    if(erroB) throw erroB;
+
+    await carregarCategorias();
+  } catch(e){
+    mostrarStatus("Erro ao reordenar categorias: " + e.message, "erro");
+  }
+}
 
 /* ============================================
    SALVAR CONFIGURAÇÕES
@@ -743,11 +984,10 @@ document.getElementById("btnSalvarConfig").onclick = async () => {
 /* ============================================
    BOOT
    ============================================ */
-if(jaAutenticado()){ 
+if(jaAutenticado()){
   mostrarPainel();
 }
 </script>
 
 </body>
 </html>
-
