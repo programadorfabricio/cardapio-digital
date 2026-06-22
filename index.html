@@ -761,6 +761,8 @@ let cardapio = [
 /* ============================================
    LÓGICA DO CARDÁPIO (não precisa editar)
    ============================================ */
+const CHAVE_STORAGE = "fhcardapio_carrinho_" + (typeof SLUG_LOJA !== "undefined" ? SLUG_LOJA : "padrao");
+
 let carrinho = {}; // { id: quantidade }
 let etapaAtual = "carrinho"; // carrinho | entrega | pagamento
 let pedido = {
@@ -773,6 +775,46 @@ let pedido = {
   divisao: [],            // [{ forma: "dinheiro", valor: 10 }, ...]
   observacao: ""
 };
+
+function salvarCarrinhoLocal(){
+  try {
+    localStorage.setItem(CHAVE_STORAGE, JSON.stringify({ carrinho, pedido, salvoEm: Date.now() }));
+  } catch(e){
+    console.warn("Não foi possível salvar o carrinho localmente.", e);
+  }
+}
+
+function carregarCarrinhoLocal(){
+  try {
+    const bruto = localStorage.getItem(CHAVE_STORAGE);
+    if(!bruto) return;
+
+    const salvo = JSON.parse(bruto);
+    if(!salvo || !salvo.carrinho) return;
+
+    // Expira depois de 6 horas — evita reabrir um pedido de dias atrás por engano
+    const SEIS_HORAS = 6 * 60 * 60 * 1000;
+    if(Date.now() - (salvo.salvoEm || 0) > SEIS_HORAS){
+      localStorage.removeItem(CHAVE_STORAGE);
+      return;
+    }
+
+    // Remove do carrinho qualquer item que não existe mais no cardápio atual
+    const carrinhoFiltrado = {};
+    Object.keys(salvo.carrinho).forEach(id => {
+      if(buscarItem(id)) carrinhoFiltrado[id] = salvo.carrinho[id];
+    });
+
+    carrinho = carrinhoFiltrado;
+    if(salvo.pedido) pedido = Object.assign(pedido, salvo.pedido);
+  } catch(e){
+    console.warn("Não foi possível carregar o carrinho salvo.", e);
+  }
+}
+
+function limparCarrinhoLocal(){
+  try { localStorage.removeItem(CHAVE_STORAGE); } catch(e){}
+}
 
 function formatarPreco(v){
   return "R$ " + v.toFixed(2).replace(".", ",");
@@ -858,30 +900,7 @@ function renderizarControle(id){
 
 function adicionar(id){
   carrinho[id] = (carrinho[id] || 0) + 1;
-  renderizarControle(id);
-  atualizarCarrinhoFlutuante();
-  if(document.getElementById("modalCarrinho").classList.contains("aberto")) renderizarModal();
-}
-
-function remover(id){
-  if(!carrinho[id]) return;
-  carrinho[id] -= 1;
-  if(carrinho[id] <= 0) delete carrinho[id];
-  renderizarControle(id);
-  atualizarCarrinhoFlutuante();
-  if(document.getElementById("modalCarrinho").classList.contains("aberto")) renderizarModal();
-}
-
-function atualizarCarrinhoFlutuante(){
-  const qtd = totalItens();
-  const flutuante = document.getElementById("carrinhoFlutuante");
-  document.getElementById("carrinhoBadge").textContent = qtd;
-  document.getElementById("carrinhoTotalFlutuante").textContent = formatarPreco(calcularTotal());
-  flutuante.classList.toggle("visivel", qtd > 0);
-}
-
-function adicionar(id){
-  carrinho[id] = (carrinho[id] || 0) + 1;
+  salvarCarrinhoLocal();
   renderizarControle(id);
   atualizarCarrinhoFlutuante();
   if(document.getElementById("modalCarrinho").classList.contains("aberto") && etapaAtual === "carrinho") renderizarEtapaCarrinho();
@@ -891,6 +910,7 @@ function remover(id){
   if(!carrinho[id]) return;
   carrinho[id] -= 1;
   if(carrinho[id] <= 0) delete carrinho[id];
+  salvarCarrinhoLocal();
   renderizarControle(id);
   atualizarCarrinhoFlutuante();
   if(document.getElementById("modalCarrinho").classList.contains("aberto") && etapaAtual === "carrinho") renderizarEtapaCarrinho();
@@ -911,6 +931,7 @@ function irPara(etapa){
   if(etapa === "entrega") renderizarEtapaEntrega();
   if(etapa === "pagamento") renderizarEtapaPagamento();
   document.getElementById("modalConteudo").scrollTop = 0;
+  salvarCarrinhoLocal();
 }
 
 /* ===== ETAPA 1: CARRINHO ===== */
@@ -970,12 +991,13 @@ function renderizarEtapaEntrega(){
   document.getElementById("btnVoltarCarrinho").onclick = () => irPara("carrinho");
 
   const inputNome = document.getElementById("inputNome");
-  inputNome.oninput = () => { pedido.nome = inputNome.value; atualizarBotaoEntrega(); };
+  inputNome.oninput = () => { pedido.nome = inputNome.value; atualizarBotaoEntrega(); salvarCarrinhoLocal(); };
 
   cont.querySelectorAll(".opcao-card").forEach(card => {
     card.onclick = () => {
       pedido.tipoEntrega = card.dataset.tipo;
       renderizarEtapaEntrega();
+      salvarCarrinhoLocal();
     };
   });
 
@@ -1003,7 +1025,7 @@ function renderizarEtapaEntrega(){
 
     ["Rua","Numero","Bairro","Complemento"].forEach(campo => {
       const input = document.getElementById("input" + campo);
-      input.oninput = () => { pedido.endereco[campo.toLowerCase()] = input.value; atualizarBotaoEntrega(); };
+      input.oninput = () => { pedido.endereco[campo.toLowerCase()] = input.value; atualizarBotaoEntrega(); salvarCarrinhoLocal(); };
     });
   } else {
     campoEndereco.innerHTML = "";
@@ -1056,6 +1078,7 @@ function renderizarEtapaPagamento(){
       pedido.divisao = [{ forma: null, valor: "" }, { forma: null, valor: "" }];
     }
     renderizarEtapaPagamento();
+    salvarCarrinhoLocal();
   };
 
   const area = document.getElementById("areaPagamento");
@@ -1075,6 +1098,7 @@ function renderizarEtapaPagamento(){
       op.onclick = () => {
         pedido.formaPagamento = op.dataset.forma;
         renderizarEtapaPagamento();
+        salvarCarrinhoLocal();
       };
     });
 
@@ -1085,7 +1109,7 @@ function renderizarEtapaPagamento(){
           <label class="campo-label">Precisa de troco para quanto? (deixe vazio se for valor exato)</label>
           <input class="campo-input" id="inputTroco" type="number" step="0.01" placeholder="Ex: 50,00" value="${pedido.trocoPara}">
         </div>`;
-      document.getElementById("inputTroco").oninput = (e) => { pedido.trocoPara = e.target.value; };
+      document.getElementById("inputTroco").oninput = (e) => { pedido.trocoPara = e.target.value; salvarCarrinhoLocal(); };
     } else if(pedido.formaPagamento === "pix"){
       campoExtra.innerHTML = `
         <div class="pix-card" id="pixCard">
@@ -1136,11 +1160,13 @@ function renderizarEtapaPagamento(){
         if(!pedido.divisao[i]) pedido.divisao[i] = { forma: null, valor: "" };
         pedido.divisao[i].forma = e.target.value;
         atualizarResumoDivisao();
+        salvarCarrinhoLocal();
       };
       document.getElementById("inputValor" + i).oninput = (e) => {
         if(!pedido.divisao[i]) pedido.divisao[i] = { forma: null, valor: "" };
         pedido.divisao[i].valor = e.target.value;
         atualizarResumoDivisao();
+        salvarCarrinhoLocal();
       };
     });
     atualizarResumoDivisao();
@@ -1157,7 +1183,7 @@ function renderizarEtapaPagamento(){
       <b>${formatarPreco(total)}</b>
     </div>
     <button class="btn-finalizar" id="btnFinalizar">📲 Enviar pedido pelo WhatsApp</button>`;
-  document.getElementById("inputObservacao").oninput = (e) => { pedido.observacao = e.target.value; };
+  document.getElementById("inputObservacao").oninput = (e) => { pedido.observacao = e.target.value; salvarCarrinhoLocal(); };
   document.getElementById("btnFinalizar").onclick = enviarPedidoWhatsApp;
   atualizarBotaoFinalizar();
 }
@@ -1246,6 +1272,12 @@ function enviarPedidoWhatsApp(){
   }
   const texto = montarMensagemWhatsApp();
   window.open(`https://wa.me/${NUMERO_WHATSAPP}?text=${texto}`, "_blank");
+
+  const idsAntigos = Object.keys(carrinho);
+  limparCarrinhoLocal();
+  carrinho = {};
+  idsAntigos.forEach(id => renderizarControle(id));
+  atualizarCarrinhoFlutuante();
   fecharModalCarrinho();
 }
 
@@ -1366,6 +1398,9 @@ function aplicarEstadoAberto(){
 async function iniciar(){
   await carregarDadosDaLoja();
   renderizarCardapio();
+  carregarCarrinhoLocal();
+  Object.keys(carrinho).forEach(id => renderizarControle(id));
+  atualizarCarrinhoFlutuante();
   aplicarEstadoAberto();
 }
 
