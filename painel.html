@@ -391,6 +391,47 @@ body{
   line-height: 1.5;
 }
 
+/* ===== CLIENTES ===== */
+.cliente-card{
+  background: var(--cor-card);
+  border: 1px solid var(--cor-card-borda);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+}
+.cliente-card-topo{
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.cliente-nome{
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--cor-creme);
+}
+.cliente-pedidos-badge{
+  font-size: 11px;
+  background: var(--cor-fundo-alt);
+  color: var(--cor-dourado);
+  padding: 3px 9px;
+  border-radius: 7px;
+  white-space: nowrap;
+}
+.cliente-info{
+  font-size: 13px;
+  color: var(--cor-creme-fraco);
+  line-height: 1.5;
+}
+.cliente-whatsapp-link{
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 12.5px;
+  color: var(--cor-verde);
+  text-decoration: none;
+  font-weight: 600;
+}
+
 /* ===== ABA CONFIG ===== */
 .config-card{
   background: var(--cor-card);
@@ -459,6 +500,7 @@ body{
     <div class="abas">
       <button class="aba-btn ativa" data-aba="itens">Cardápio</button>
       <button class="aba-btn" data-aba="categorias">Categorias</button>
+      <button class="aba-btn" data-aba="clientes">Clientes</button>
       <button class="aba-btn" data-aba="config">Configurações</button>
     </div>
 
@@ -472,6 +514,13 @@ body{
       <div class="loading" id="loadingCategorias">Carregando categorias...</div>
       <div id="listaCategoriasGerenciar"></div>
       <button class="btn-add-item" id="btnAddCategoria">+ Adicionar nova categoria</button>
+    </div>
+
+    <div class="aba-conteudo" id="abaClientes">
+      <p class="dica-texto">Clientes são cadastrados automaticamente quando fazem um pedido pelo cardápio. Na próxima compra, os dados deles são preenchidos sozinhos.</p>
+      <input type="text" class="campo-input" id="buscaCliente" placeholder="Buscar por nome ou telefone..." style="margin-bottom:14px;">
+      <div class="loading" id="loadingClientes">Carregando clientes...</div>
+      <div id="listaClientes"></div>
     </div>
 
     <div class="aba-conteudo" id="abaConfig">
@@ -524,6 +573,7 @@ const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let itensCache = [];
 let categoriasCache = [];
+let clientesCache = [];
 let configCache = null;
 
 /* ============================================
@@ -609,10 +659,82 @@ function mostrarStatus(msg, tipo){
    CARREGAMENTO
    ============================================ */
 async function carregarTudo(){
-  await Promise.all([carregarCategorias(), carregarConfig()]);
+  await Promise.all([carregarCategorias(), carregarConfig(), carregarClientes()]);
   await carregarItens();
   renderizarCategorias(); // re-renderiza pra atualizar a contagem de itens por categoria
 }
+
+async function carregarClientes(){
+  document.getElementById("loadingClientes").style.display = "block";
+  try {
+    const { data, error } = await supabaseClient
+      .from("cardapio_clientes")
+      .select("*")
+      .eq("slug_loja", SLUG_LOJA)
+      .order("atualizado_em", { ascending: false });
+
+    if(error) throw error;
+    clientesCache = data || [];
+    renderizarClientes();
+  } catch(e){
+    mostrarStatus("Erro ao carregar clientes: " + e.message, "erro");
+  }
+  document.getElementById("loadingClientes").style.display = "none";
+}
+
+function renderizarClientes(filtro){
+  const container = document.getElementById("listaClientes");
+  container.innerHTML = "";
+
+  let lista = clientesCache;
+  if(filtro && filtro.trim()){
+    const termo = filtro.trim().toLowerCase();
+    const termoNumeros = termo.replace(/\D/g, "");
+    lista = clientesCache.filter(c =>
+      c.nome.toLowerCase().includes(termo) || (termoNumeros.length > 0 && c.telefone.includes(termoNumeros))
+    );
+  }
+
+  if(lista.length === 0){
+    container.innerHTML = `<p style="color:var(--cor-creme-fraco); font-size:13px; text-align:center; padding:20px 0;">${clientesCache.length === 0 ? "Nenhum cliente cadastrado ainda. Os cadastros aparecem aqui automaticamente conforme os pedidos chegam." : "Nenhum cliente encontrado com esse termo."}</p>`;
+    return;
+  }
+
+  lista.forEach(cliente => {
+    const card = document.createElement("div");
+    card.className = "cliente-card";
+
+    const telefoneFormatado = formatarTelefoneExibicao(cliente.telefone);
+    const endereco = [cliente.endereco_rua, cliente.endereco_numero, cliente.endereco_bairro]
+      .filter(Boolean).join(", ");
+
+    card.innerHTML = `
+      <div class="cliente-card-topo">
+        <span class="cliente-nome">${cliente.nome}</span>
+        <span class="cliente-pedidos-badge">${cliente.total_pedidos || 0} ${cliente.total_pedidos === 1 ? "pedido" : "pedidos"}</span>
+      </div>
+      <div class="cliente-info">
+        📱 ${telefoneFormatado}
+        ${endereco ? `<br>📍 ${endereco}` : ""}
+      </div>
+      <a class="cliente-whatsapp-link" href="https://wa.me/${cliente.telefone}" target="_blank">Abrir WhatsApp →</a>
+    `;
+    container.appendChild(card);
+  });
+}
+
+function formatarTelefoneExibicao(telefone){
+  // 5519988887777 -> (19) 98888-7777
+  const numeros = telefone.replace(/\D/g, "");
+  if(numeros.length === 13){
+    return `(${numeros.slice(2,4)}) ${numeros.slice(4,9)}-${numeros.slice(9)}`;
+  }
+  return telefone;
+}
+
+document.getElementById("buscaCliente").addEventListener("input", (e) => {
+  renderizarClientes(e.target.value);
+});
 
 async function carregarCategorias(){
   document.getElementById("loadingCategorias").style.display = "block";

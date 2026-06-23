@@ -430,6 +430,15 @@ body{
   margin-bottom:6px;
   display:block;
 }
+.cliente-status{
+  font-size: 12.5px;
+  color: var(--cor-creme-fraco);
+  margin-top: 6px;
+  min-height: 16px;
+}
+.cliente-status.encontrado{
+  color: #9fd4ac;
+}
 .campo-input{
   width:100%;
   background: var(--cor-card);
@@ -767,6 +776,7 @@ let carrinho = {}; // { id: quantidade }
 let etapaAtual = "carrinho"; // carrinho | entrega | pagamento
 let pedido = {
   nome: "",
+  telefone: "",
   tipoEntrega: null,      // "entrega" | "retirada"
   endereco: { rua: "", numero: "", bairro: "", complemento: "" },
   formaPagamento: null,   // "pix" | "dinheiro" | "debito" | "credito" | "vale"
@@ -975,6 +985,11 @@ function renderizarEtapaEntrega(){
   cont.innerHTML = `
     <button class="btn-voltar" id="btnVoltarCarrinho">← Voltar ao pedido</button>
     <div class="campo-grupo">
+      <label class="campo-label">Telefone (WhatsApp)</label>
+      <input class="campo-input" id="inputTelefone" placeholder="(19) 98765-4321" value="${pedido.telefone || ''}" inputmode="numeric">
+      <div class="cliente-status" id="clienteStatus"></div>
+    </div>
+    <div class="campo-grupo">
       <label class="campo-label">Nome para o pedido</label>
       <input class="campo-input" id="inputNome" placeholder="Seu nome" value="${pedido.nome}">
     </div>
@@ -989,6 +1004,22 @@ function renderizarEtapaEntrega(){
     <div id="campoEndereco"></div>`;
 
   document.getElementById("btnVoltarCarrinho").onclick = () => irPara("carrinho");
+
+  const inputTelefone = document.getElementById("inputTelefone");
+  let timeoutBuscaCliente = null;
+  inputTelefone.oninput = () => {
+    pedido.telefone = inputTelefone.value;
+    atualizarBotaoEntrega();
+    salvarCarrinhoLocal();
+
+    clearTimeout(timeoutBuscaCliente);
+    const telefoneNumeros = inputTelefone.value.replace(/\D/g, "");
+    if(telefoneNumeros.length >= 10){
+      timeoutBuscaCliente = setTimeout(() => buscarClientePorTelefone(telefoneNumeros), 500);
+    } else {
+      document.getElementById("clienteStatus").textContent = "";
+    }
+  };
 
   const inputNome = document.getElementById("inputNome");
   inputNome.oninput = () => { pedido.nome = inputNome.value; atualizarBotaoEntrega(); salvarCarrinhoLocal(); };
@@ -1037,10 +1068,62 @@ function renderizarEtapaEntrega(){
   atualizarBotaoEntrega();
 }
 
+function normalizarTelefoneComDDI(telefoneNumeros){
+  // Se já vier com 55 na frente e tiver 12-13 dígitos, mantém. Senão, adiciona 55.
+  if(telefoneNumeros.length >= 12 && telefoneNumeros.startsWith("55")) return telefoneNumeros;
+  return "55" + telefoneNumeros;
+}
+
+async function buscarClientePorTelefone(telefoneNumeros){
+  if(!supabaseClient) return;
+
+  const statusEl = document.getElementById("clienteStatus");
+  if(!statusEl) return; // pode ter saído da tela enquanto a busca rodava
+
+  statusEl.textContent = "Verificando...";
+  statusEl.className = "cliente-status";
+
+  const telefoneCompleto = normalizarTelefoneComDDI(telefoneNumeros);
+
+  try {
+    const { data, error } = await supabaseClient
+      .from("cardapio_clientes")
+      .select("*")
+      .eq("slug_loja", SLUG_LOJA)
+      .eq("telefone", telefoneCompleto)
+      .maybeSingle();
+
+    if(error) throw error;
+
+    const statusElAtual = document.getElementById("clienteStatus");
+    if(!statusElAtual) return; // saiu da tela durante a busca
+
+    if(data){
+      pedido.nome = data.nome;
+      pedido.endereco.rua = data.endereco_rua || "";
+      pedido.endereco.numero = data.endereco_numero || "";
+      pedido.endereco.bairro = data.endereco_bairro || "";
+      pedido.endereco.complemento = data.endereco_complemento || "";
+      salvarCarrinhoLocal();
+
+      statusElAtual.textContent = `Bem-vindo de volta, ${data.nome.split(" ")[0]}! Seus dados foram preenchidos.`;
+      statusElAtual.className = "cliente-status encontrado";
+
+      renderizarEtapaEntrega(); // re-renderiza pra mostrar nome e endereço preenchidos
+    } else {
+      statusElAtual.textContent = "Cliente novo — preencha seus dados abaixo.";
+      statusElAtual.className = "cliente-status";
+    }
+  } catch(e){
+    console.warn("Erro ao buscar cliente:", e);
+  }
+}
+
 function atualizarBotaoEntrega(){
   const btn = document.getElementById("btnIrPagamento");
   if(!btn) return;
-  let valido = !!pedido.nome.trim() && !!pedido.tipoEntrega;
+  const telefoneNumeros = (pedido.telefone || "").replace(/\D/g, "");
+  let valido = !!pedido.nome.trim() && !!pedido.tipoEntrega && telefoneNumeros.length >= 10;
   if(valido && pedido.tipoEntrega === "entrega"){
     valido = pedido.endereco.rua.trim() && pedido.endereco.numero.trim() && pedido.endereco.bairro.trim();
   }
@@ -1230,7 +1313,7 @@ function textoFormaPagamento(id){
 
 function montarMensagemWhatsApp(){
   const ids = Object.keys(carrinho);
-  let msg = `Olá! Meu nome é *${pedido.nome}* e gostaria de fazer o seguinte pedido:\n\n`;
+  let msg = `Olá! Meu nome é *${pedido.nome}* (📱 ${pedido.telefone}) e gostaria de fazer o seguinte pedido:\n\n`;
   ids.forEach(id => {
     const item = buscarItem(id);
     const qtd = carrinho[id];
@@ -1273,12 +1356,55 @@ function enviarPedidoWhatsApp(){
   const texto = montarMensagemWhatsApp();
   window.open(`https://wa.me/${NUMERO_WHATSAPP}?text=${texto}`, "_blank");
 
+  salvarOuAtualizarCliente(); // não bloqueia o envio se falhar, é só um "registro a mais"
+
   const idsAntigos = Object.keys(carrinho);
   limparCarrinhoLocal();
   carrinho = {};
   idsAntigos.forEach(id => renderizarControle(id));
   atualizarCarrinhoFlutuante();
   fecharModalCarrinho();
+}
+
+async function salvarOuAtualizarCliente(){
+  if(!supabaseClient) return;
+
+  const telefoneNumeros = (pedido.telefone || "").replace(/\D/g, "");
+  if(telefoneNumeros.length < 10) return;
+
+  const telefoneCompleto = normalizarTelefoneComDDI(telefoneNumeros);
+
+  try {
+    const { data: existente } = await supabaseClient
+      .from("cardapio_clientes")
+      .select("id, total_pedidos")
+      .eq("slug_loja", SLUG_LOJA)
+      .eq("telefone", telefoneCompleto)
+      .maybeSingle();
+
+    const payload = {
+      slug_loja: SLUG_LOJA,
+      telefone: telefoneCompleto,
+      nome: pedido.nome,
+      endereco_rua: pedido.endereco.rua,
+      endereco_numero: pedido.endereco.numero,
+      endereco_bairro: pedido.endereco.bairro,
+      endereco_complemento: pedido.endereco.complemento
+    };
+
+    if(existente){
+      await supabaseClient
+        .from("cardapio_clientes")
+        .update({ ...payload, total_pedidos: (existente.total_pedidos || 0) + 1 })
+        .eq("id", existente.id);
+    } else {
+      await supabaseClient
+        .from("cardapio_clientes")
+        .insert({ ...payload, total_pedidos: 1 });
+    }
+  } catch(e){
+    console.warn("Não foi possível salvar o cadastro do cliente:", e);
+  }
 }
 
 // Eventos
