@@ -625,6 +625,109 @@ body{
   line-height:1.4;
 }
 
+/* ===== PIX DINÂMICO (QR Code + contador) ===== */
+.pix-dinamico{
+  background: var(--cor-fundo-alt);
+  border: 1.5px dashed var(--cor-dourado);
+  border-radius: 12px;
+  padding: 18px 16px;
+  margin-top: 4px;
+  margin-bottom: 14px;
+  text-align: center;
+}
+.pix-dinamico-titulo{
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--cor-dourado);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 12px;
+}
+.pix-qrcode{
+  width: 180px;
+  height: 180px;
+  margin: 0 auto 12px;
+  border-radius: 10px;
+  background: #fff;
+  padding: 8px;
+}
+.pix-qrcode img{ width: 100%; height: 100%; object-fit: contain; }
+.pix-contador{
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--cor-creme);
+  margin-bottom: 4px;
+  font-family: monospace;
+}
+.pix-contador.alerta{ color: var(--cor-brasa-clara); }
+.pix-status-texto{
+  font-size: 12.5px;
+  color: var(--cor-creme-fraco);
+  margin-bottom: 12px;
+}
+.pix-codigo-copiar{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--cor-card);
+  border: 1px solid var(--cor-card-borda);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-top: 8px;
+}
+.pix-codigo-copiar span{
+  flex: 1;
+  font-size: 11px;
+  color: var(--cor-creme-fraco);
+  word-break: break-all;
+  text-align: left;
+  max-height: 40px;
+  overflow: hidden;
+}
+.pix-loading{
+  padding: 30px 16px;
+  text-align: center;
+  color: var(--cor-creme-fraco);
+  font-size: 13px;
+}
+.pix-spinner{
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--cor-card-borda);
+  border-top-color: var(--cor-brasa);
+  border-radius: 50%;
+  margin: 0 auto 12px;
+  animation: girar 0.8s linear infinite;
+}
+@keyframes girar{ to{ transform: rotate(360deg); } }
+.pix-confirmado{
+  padding: 24px 16px;
+  text-align: center;
+}
+.pix-confirmado-icone{ font-size: 40px; margin-bottom: 8px; }
+.pix-confirmado-texto{
+  font-size: 15px;
+  font-weight: 700;
+  color: #9fd4ac;
+}
+.pix-erro{
+  padding: 16px;
+  text-align: center;
+  color: var(--cor-brasa-clara);
+  font-size: 13px;
+}
+.btn-pix-recarregar{
+  background: var(--cor-brasa);
+  color: #fff;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 10px;
+}
+
 @media(min-width:600px){
   .carrinho-flutuante, .modal-carrinho{ max-width:480px; margin:0 auto; left:0; right:0; }
 }
@@ -937,6 +1040,7 @@ function atualizarCarrinhoFlutuante(){
 
 /* ===== NAVEGAÇÃO ENTRE ETAPAS ===== */
 function irPara(etapa){
+  if(etapaAtual === "pagamento" && etapa !== "pagamento") pararPollingPix();
   etapaAtual = etapa;
   if(etapa === "carrinho") renderizarEtapaCarrinho();
   if(etapa === "entrega") renderizarEtapaEntrega();
@@ -1203,30 +1307,13 @@ function renderizarEtapaPagamento(){
         </div>`;
       document.getElementById("inputTroco").oninput = (e) => { pedido.trocoPara = e.target.value; salvarCarrinhoLocal(); };
     } else if(pedido.formaPagamento === "pix"){
-      campoExtra.innerHTML = `
-        <div class="pix-card" id="pixCard">
-          <div class="pix-card-titulo">💠 Chave Pix para pagamento</div>
-          <div class="pix-card-nome">${NOME_PIX}</div>
-          <div class="pix-card-chave">
-            <span id="textoChavePix">${CHAVE_PIX}</span>
-            <button class="btn-copiar" id="btnCopiarPix">Copiar</button>
-          </div>
-          <div class="pix-card-aviso">Copie a chave, faça o pagamento no valor de <b style="color:var(--cor-dourado)">${formatarPreco(total)}</b> e envie o pedido. O comprovante pode ser enviado junto no WhatsApp.</div>
-        </div>`;
-      document.getElementById("btnCopiarPix").onclick = (e) => {
-        navigator.clipboard.writeText(CHAVE_PIX).then(() => {
-          e.target.textContent = "Copiado ✓";
-          e.target.classList.add("copiado");
-          setTimeout(() => {
-            e.target.textContent = "Copiar";
-            e.target.classList.remove("copiado");
-          }, 2000);
-        });
-      };
+      campoExtra.innerHTML = `<div id="pixDinamico" class="pix-dinamico"></div>`;
       setTimeout(() => {
-        document.getElementById("pixCard").scrollIntoView({ behavior: "smooth", block: "center" });
+        document.getElementById("pixDinamico").scrollIntoView({ behavior: "smooth", block: "center" });
       }, 50);
+      iniciarFluxoPix(total);
     } else {
+      pararPollingPix();
       campoExtra.innerHTML = "";
     }
   } else {
@@ -1305,6 +1392,9 @@ function atualizarBotaoFinalizar(){
   let valido = false;
   if(!pedido.dividirPagamento){
     valido = !!pedido.formaPagamento;
+    if(valido && pedido.formaPagamento === "pix"){
+      valido = pixPago === true; // só libera enviar depois da confirmação automática
+    }
   } else {
     const total = calcularTotal();
     const soma = pedido.divisao.reduce((acc, d) => acc + (parseFloat(d.valor) || 0), 0);
@@ -1344,6 +1434,9 @@ function montarMensagemWhatsApp(){
     if(pedido.formaPagamento === "dinheiro" && pedido.trocoPara){
       msg += ` — troco para ${formatarPreco(parseFloat(pedido.trocoPara))}`;
     }
+    if(pedido.formaPagamento === "pix" && pixPago){
+      msg += ` ✅ (pagamento confirmado automaticamente)`;
+    }
   } else {
     pedido.divisao.forEach(d => {
       msg += `${formatarPreco(parseFloat(d.valor) || 0)} em ${textoFormaPagamento(d.forma)}\n`;
@@ -1357,6 +1450,176 @@ function montarMensagemWhatsApp(){
   return encodeURIComponent(msg.trim());
 }
 
+/* ============================================
+   FLUXO DE PIX DINÂMICO (QR Code + confirmação automática)
+   ============================================ */
+let pixPagamentoId = null;
+let pixIntervalo = null;
+let pixContadorIntervalo = null;
+let pixPago = false;
+const PIX_DURACAO_SEGUNDOS = 5 * 60; // 5 minutos
+
+function pararPollingPix(){
+  if(pixIntervalo) clearInterval(pixIntervalo);
+  if(pixContadorIntervalo) clearInterval(pixContadorIntervalo);
+  pixIntervalo = null;
+  pixContadorIntervalo = null;
+}
+
+async function iniciarFluxoPix(valor){
+  pixPago = false;
+  pararPollingPix();
+
+  const container = document.getElementById("pixDinamico");
+  if(!container) return;
+
+  container.innerHTML = `
+    <div class="pix-loading">
+      <div class="pix-spinner"></div>
+      Gerando seu Pix...
+    </div>`;
+
+  try {
+    const resposta = await fetch(`${SUPABASE_URL}/functions/v1/criar-pix`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        valor: valor,
+        descricao: `Pedido Brasa & Cia`,
+        slugLoja: SLUG_LOJA,
+        pedidoId: Date.now().toString(),
+      }),
+    });
+
+    const dados = await resposta.json();
+
+    if(!resposta.ok || !dados.qrCodeBase64){
+      console.warn("Erro ao gerar Pix:", dados);
+      mostrarErroPix("Não foi possível gerar o Pix agora.");
+      return;
+    }
+
+    pixPagamentoId = dados.id;
+    mostrarQrCodePix(dados, valor);
+    iniciarContadorPix();
+    iniciarPollingPix();
+
+  } catch(e){
+    console.warn("Erro de conexão ao gerar Pix:", e);
+    mostrarErroPix("Erro de conexão ao gerar o Pix.");
+  }
+}
+
+function mostrarQrCodePix(dados, valor){
+  const container = document.getElementById("pixDinamico");
+  if(!container) return;
+
+  container.innerHTML = `
+    <div class="pix-dinamico-titulo">💠 Pague com Pix</div>
+    <div class="pix-qrcode"><img src="data:image/png;base64,${dados.qrCodeBase64}" alt="QR Code Pix"></div>
+    <div class="pix-contador" id="pixContador">5:00</div>
+    <div class="pix-status-texto" id="pixStatusTexto">Aguardando pagamento de ${formatarPreco(valor)}...</div>
+    <div class="pix-codigo-copiar">
+      <span>${dados.qrCodeTexto}</span>
+      <button class="btn-copiar" id="btnCopiarCodigoPix">Copiar</button>
+    </div>`;
+
+  document.getElementById("btnCopiarCodigoPix").onclick = (e) => {
+    navigator.clipboard.writeText(dados.qrCodeTexto).then(() => {
+      e.target.textContent = "Copiado ✓";
+      setTimeout(() => { e.target.textContent = "Copiar"; }, 2000);
+    });
+  };
+
+  atualizarBotaoFinalizar();
+}
+
+function iniciarContadorPix(){
+  let restante = PIX_DURACAO_SEGUNDOS;
+  const elContador = () => document.getElementById("pixContador");
+
+  pixContadorIntervalo = setInterval(() => {
+    restante--;
+    const el = elContador();
+    if(!el){ clearInterval(pixContadorIntervalo); return; }
+
+    const min = Math.floor(restante / 60);
+    const seg = restante % 60;
+    el.textContent = `${min}:${seg.toString().padStart(2,"0")}`;
+    if(restante <= 60) el.classList.add("alerta");
+
+    if(restante <= 0){
+      clearInterval(pixContadorIntervalo);
+      if(!pixPago) mostrarPixExpirado();
+    }
+  }, 1000);
+}
+
+function iniciarPollingPix(){
+  pixIntervalo = setInterval(async () => {
+    if(!pixPagamentoId || pixPago) return;
+
+    try {
+      const resposta = await fetch(`${SUPABASE_URL}/functions/v1/checar-pix`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pagamentoId: pixPagamentoId }),
+      });
+      const dados = await resposta.json();
+
+      if(dados.status === "approved"){
+        pixPago = true;
+        pararPollingPix();
+        mostrarPixConfirmado();
+      }
+    } catch(e){
+      console.warn("Erro ao checar status do Pix:", e);
+    }
+  }, 4000); // checa a cada 4 segundos
+}
+
+function mostrarPixConfirmado(){
+  const container = document.getElementById("pixDinamico");
+  if(!container) return;
+
+  container.innerHTML = `
+    <div class="pix-confirmado">
+      <div class="pix-confirmado-icone">✅</div>
+      <div class="pix-confirmado-texto">Pagamento confirmado!</div>
+    </div>`;
+
+  atualizarBotaoFinalizar();
+}
+
+function mostrarPixExpirado(){
+  const container = document.getElementById("pixDinamico");
+  if(!container) return;
+
+  pararPollingPix();
+  container.innerHTML = `
+    <div class="pix-erro">
+      ⏱️ O tempo para pagamento esgotou.
+      <br><button class="btn-pix-recarregar" id="btnRecarregarPix">Gerar novo Pix</button>
+    </div>`;
+
+  document.getElementById("btnRecarregarPix").onclick = () => iniciarFluxoPix(calcularTotal());
+  atualizarBotaoFinalizar();
+}
+
+function mostrarErroPix(mensagem){
+  const container = document.getElementById("pixDinamico");
+  if(!container) return;
+
+  container.innerHTML = `
+    <div class="pix-erro">
+      ⚠️ ${mensagem}
+      <br><button class="btn-pix-recarregar" id="btnRecarregarPix">Tentar novamente</button>
+    </div>`;
+
+  document.getElementById("btnRecarregarPix").onclick = () => iniciarFluxoPix(calcularTotal());
+  atualizarBotaoFinalizar();
+}
+
 function enviarPedidoWhatsApp(){
   if(totalItens() === 0) return;
   if(!lojaEstaAberta()){
@@ -1367,6 +1630,10 @@ function enviarPedidoWhatsApp(){
   window.open(`https://wa.me/${NUMERO_WHATSAPP}?text=${texto}`, "_blank");
 
   salvarOuAtualizarCliente(); // não bloqueia o envio se falhar, é só um "registro a mais"
+
+  pararPollingPix();
+  pixPagamentoId = null;
+  pixPago = false;
 
   const idsAntigos = Object.keys(carrinho);
   limparCarrinhoLocal();
@@ -1425,6 +1692,7 @@ document.getElementById("carrinhoFlutuante").onclick = () => {
 };
 
 function fecharModalCarrinho(){
+  pararPollingPix();
   document.getElementById("overlay").classList.remove("aberto");
   document.getElementById("modalCarrinho").classList.remove("aberto");
 }
