@@ -840,7 +840,8 @@ function buscarItem(id){
 function calcularTotal(){
   let total = 0;
   for(const id in carrinho){
-    total += buscarItem(id).preco * carrinho[id];
+    const item = buscarItem(id);
+    if(item) total += item.preco * carrinho[id];
   }
   return total;
 }
@@ -948,6 +949,14 @@ function irPara(etapa){
 function renderizarEtapaCarrinho(){
   document.getElementById("modalTitulo").textContent = "Seu pedido";
   const cont = document.getElementById("modalConteudo");
+
+  // Remove do carrinho qualquer id que não existe mais no cardápio atual
+  // (pode acontecer se um item foi removido/alterado no painel depois do carrinho salvo)
+  Object.keys(carrinho).forEach(id => {
+    if(!buscarItem(id)) delete carrinho[id];
+  });
+  salvarCarrinhoLocal();
+
   const ids = Object.keys(carrinho);
 
   if(ids.length === 0){
@@ -1316,6 +1325,7 @@ function montarMensagemWhatsApp(){
   let msg = `Olá! Meu nome é *${pedido.nome}* (📱 ${pedido.telefone}) e gostaria de fazer o seguinte pedido:\n\n`;
   ids.forEach(id => {
     const item = buscarItem(id);
+    if(!item) return;
     const qtd = carrinho[id];
     msg += `• ${qtd}x ${item.nome} — ${formatarPreco(item.preco * qtd)}\n`;
   });
