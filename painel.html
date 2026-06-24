@@ -391,6 +391,89 @@ body{
   line-height: 1.5;
 }
 
+/* ===== VENDAS ===== */
+.periodo-tabs{
+  display: flex;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.periodo-tab{
+  flex: 1;
+  background: var(--cor-fundo-alt);
+  border: 1px solid var(--cor-card-borda);
+  color: var(--cor-creme-fraco);
+  padding: 9px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.periodo-tab.ativa{ background: var(--cor-brasa); border-color: var(--cor-brasa); color: #fff; }
+
+.vendas-cards{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+.venda-card{
+  background: var(--cor-card);
+  border: 1px solid var(--cor-card-borda);
+  border-radius: 12px;
+  padding: 16px;
+}
+.venda-card-label{
+  font-size: 11px;
+  color: var(--cor-creme-fraco);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+.venda-card-valor{
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--cor-dourado);
+}
+.venda-card-valor.destaque{ color: var(--cor-creme); }
+
+.ranking-titulo{
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--cor-dourado);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 18px 0 10px;
+}
+.ranking-item{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--cor-card);
+  border: 1px solid var(--cor-card-borda);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 8px;
+}
+.ranking-posicao{
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--cor-creme-fraco);
+  width: 22px;
+}
+.ranking-nome{ flex: 1; font-size: 13.5px; color: var(--cor-creme); }
+.ranking-qtd{
+  font-size: 12px;
+  color: var(--cor-dourado);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.vendas-vazio{
+  text-align: center;
+  color: var(--cor-creme-fraco);
+  font-size: 13px;
+  padding: 30px 0;
+}
+
 /* ===== CLIENTES ===== */
 .cliente-card{
   background: var(--cor-card);
@@ -498,13 +581,24 @@ body{
     <div class="status-msg" id="statusMsg"></div>
 
     <div class="abas">
-      <button class="aba-btn ativa" data-aba="itens">Cardápio</button>
+      <button class="aba-btn ativa" data-aba="vendas">Vendas</button>
+      <button class="aba-btn" data-aba="itens">Cardápio</button>
       <button class="aba-btn" data-aba="categorias">Categorias</button>
       <button class="aba-btn" data-aba="clientes">Clientes</button>
       <button class="aba-btn" data-aba="config">Configurações</button>
     </div>
 
-    <div class="aba-conteudo ativa" id="abaItens">
+    <div class="aba-conteudo ativa" id="abaVendas">
+      <div class="periodo-tabs">
+        <button class="periodo-tab ativa" data-periodo="hoje">Hoje</button>
+        <button class="periodo-tab" data-periodo="semana">7 dias</button>
+        <button class="periodo-tab" data-periodo="mes">30 dias</button>
+      </div>
+      <div class="loading" id="loadingVendas">Carregando vendas...</div>
+      <div id="resumoVendas"></div>
+    </div>
+
+    <div class="aba-conteudo" id="abaItens">
       <div class="loading" id="loadingItens">Carregando itens...</div>
       <div id="listaCategorias"></div>
     </div>
@@ -659,10 +753,119 @@ function mostrarStatus(msg, tipo){
    CARREGAMENTO
    ============================================ */
 async function carregarTudo(){
-  await Promise.all([carregarCategorias(), carregarConfig(), carregarClientes()]);
+  await Promise.all([carregarCategorias(), carregarConfig(), carregarClientes(), carregarVendas()]);
   await carregarItens();
   renderizarCategorias(); // re-renderiza pra atualizar a contagem de itens por categoria
 }
+
+let pedidosCache = [];
+let periodoVendasAtual = "hoje";
+
+async function carregarVendas(){
+  document.getElementById("loadingVendas").style.display = "block";
+  try {
+    const { data, error } = await supabaseClient
+      .from("cardapio_pedidos")
+      .select("*")
+      .eq("slug_loja", SLUG_LOJA)
+      .order("criado_em", { ascending: false });
+
+    if(error) throw error;
+    pedidosCache = data || [];
+    renderizarVendas();
+  } catch(e){
+    mostrarStatus("Erro ao carregar vendas: " + e.message, "erro");
+  }
+  document.getElementById("loadingVendas").style.display = "none";
+}
+
+function filtrarPedidosPorPeriodo(periodo){
+  const agora = new Date();
+  let dataLimite;
+
+  if(periodo === "hoje"){
+    dataLimite = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate());
+  } else if(periodo === "semana"){
+    dataLimite = new Date(agora.getTime() - 7 * 24 * 60 * 60 * 1000);
+  } else {
+    dataLimite = new Date(agora.getTime() - 30 * 24 * 60 * 60 * 1000);
+  }
+
+  return pedidosCache.filter(p => new Date(p.criado_em) >= dataLimite);
+}
+
+function renderizarVendas(){
+  const container = document.getElementById("resumoVendas");
+  const pedidosFiltrados = filtrarPedidosPorPeriodo(periodoVendasAtual);
+
+  if(pedidosFiltrados.length === 0){
+    container.innerHTML = `
+      <div class="vendas-cards">
+        <div class="venda-card">
+          <div class="venda-card-label">Total vendido</div>
+          <div class="venda-card-valor">R$ 0,00</div>
+        </div>
+        <div class="venda-card">
+          <div class="venda-card-label">Pedidos</div>
+          <div class="venda-card-valor destaque">0</div>
+        </div>
+      </div>
+      <div class="vendas-vazio">Nenhuma venda registrada nesse período.</div>`;
+    return;
+  }
+
+  const totalVendido = pedidosFiltrados.reduce((acc, p) => acc + parseFloat(p.total), 0);
+  const qtdPedidos = pedidosFiltrados.length;
+
+  // Ranking de itens mais vendidos
+  const contagemItens = {};
+  pedidosFiltrados.forEach(p => {
+    (p.itens || []).forEach(item => {
+      if(!contagemItens[item.nome]) contagemItens[item.nome] = 0;
+      contagemItens[item.nome] += item.quantidade;
+    });
+  });
+
+  const ranking = Object.entries(contagemItens)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5);
+
+  container.innerHTML = `
+    <div class="vendas-cards">
+      <div class="venda-card">
+        <div class="venda-card-label">Total vendido</div>
+        <div class="venda-card-valor">${formatarPrecoPainel(totalVendido)}</div>
+      </div>
+      <div class="venda-card">
+        <div class="venda-card-label">Pedidos</div>
+        <div class="venda-card-valor destaque">${qtdPedidos}</div>
+      </div>
+    </div>
+    ${ranking.length > 0 ? `
+      <div class="ranking-titulo">Mais vendidos</div>
+      ${ranking.map(([nome, qtd], i) => `
+        <div class="ranking-item">
+          <span class="ranking-posicao">${i+1}º</span>
+          <span class="ranking-nome">${nome}</span>
+          <span class="ranking-qtd">${qtd} ${qtd === 1 ? "venda" : "vendas"}</span>
+        </div>
+      `).join("")}
+    ` : ""}
+  `;
+}
+
+function formatarPrecoPainel(v){
+  return "R$ " + v.toFixed(2).replace(".", ",");
+}
+
+document.querySelectorAll(".periodo-tab").forEach(tab => {
+  tab.onclick = () => {
+    document.querySelectorAll(".periodo-tab").forEach(t => t.classList.remove("ativa"));
+    tab.classList.add("ativa");
+    periodoVendasAtual = tab.dataset.periodo;
+    renderizarVendas();
+  };
+});
 
 async function carregarClientes(){
   document.getElementById("loadingClientes").style.display = "block";

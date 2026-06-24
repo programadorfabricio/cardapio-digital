@@ -1636,6 +1636,7 @@ function enviarPedidoWhatsApp(){
   window.open(`https://wa.me/${NUMERO_WHATSAPP}?text=${texto}`, "_blank");
 
   salvarOuAtualizarCliente(); // não bloqueia o envio se falhar, é só um "registro a mais"
+  registrarPedido(); // idem — registra pra fins de relatório, sem travar o fluxo se falhar
 
   pararPollingPix();
   pixPagamentoId = null;
@@ -1647,6 +1648,34 @@ function enviarPedidoWhatsApp(){
   idsAntigos.forEach(id => renderizarControle(id));
   atualizarCarrinhoFlutuante();
   fecharModalCarrinho();
+}
+
+async function registrarPedido(){
+  if(!supabaseClient) return;
+
+  try {
+    const itensDoPedido = Object.keys(carrinho).map(id => {
+      const item = buscarItem(id);
+      if(!item) return null;
+      return { nome: item.nome, quantidade: carrinho[id], preco_unitario: item.preco };
+    }).filter(Boolean);
+
+    if(itensDoPedido.length === 0) return;
+
+    await supabaseClient.from("cardapio_pedidos").insert({
+      slug_loja: SLUG_LOJA,
+      nome_cliente: pedido.nome,
+      telefone_cliente: (pedido.telefone || "").replace(/\D/g, ""),
+      tipo_entrega: pedido.tipoEntrega,
+      forma_pagamento: pedido.dividirPagamento ? "dividido" : pedido.formaPagamento,
+      total: calcularTotal(),
+      itens: itensDoPedido,
+      observacao: pedido.observacao || "",
+      pix_confirmado: pedido.formaPagamento === "pix" ? pixPago : false,
+    });
+  } catch(e){
+    console.warn("Não foi possível registrar o pedido para relatório:", e);
+  }
 }
 
 async function salvarOuAtualizarCliente(){
