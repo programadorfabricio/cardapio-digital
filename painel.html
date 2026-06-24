@@ -129,6 +129,55 @@ body{
 }
 .btn-sair:hover{ border-color: var(--cor-brasa); color: var(--cor-creme); }
 
+.topo-acoes{ display: flex; align-items: center; gap: 10px; }
+
+.btn-notificacao{
+  position: relative;
+  background: none;
+  border: 1px solid var(--cor-card-borda);
+  color: var(--cor-creme-fraco);
+  border-radius: 8px;
+  padding: 7px 11px;
+  font-size: 15px;
+  cursor: pointer;
+}
+.btn-notificacao.ativada{ border-color: var(--cor-verde); color: var(--cor-creme); }
+.badge-notificacao{
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background: var(--cor-brasa);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  min-width: 17px;
+  height: 17px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 3px;
+}
+
+.banner-pedido-novo{
+  display: none;
+  background: var(--cor-verde);
+  color: #fff;
+  text-align: center;
+  padding: 12px 16px;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+  position: sticky;
+  top: 61px;
+  z-index: 9;
+  animation: pulsar 1.5s ease-in-out infinite;
+}
+@keyframes pulsar{
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.85; }
+}
+
 .conteudo{ padding: 20px; max-width: 720px; margin: 0 auto; }
 
 .abas{
@@ -574,8 +623,15 @@ body{
 <div class="painel" id="telaPainel">
   <div class="topo">
     <h1>FH <span>CARDÁPIO</span></h1>
-    <button class="btn-sair" id="btnSair">Sair</button>
+    <div class="topo-acoes">
+      <button class="btn-notificacao" id="btnNotificacao" title="Ativar som de notificação">
+        🔔<span class="badge-notificacao" id="badgeNotificacao" style="display:none;">0</span>
+      </button>
+      <button class="btn-sair" id="btnSair">Sair</button>
+    </div>
   </div>
+
+  <div id="bannerPedidoNovo" class="banner-pedido-novo"></div>
 
   <div class="conteudo">
     <div class="status-msg" id="statusMsg"></div>
@@ -713,6 +769,7 @@ document.getElementById("inputSenha").addEventListener("keydown", (e) => {
 });
 
 document.getElementById("btnSair").onclick = () => {
+  if(intervaloChecagemPedidos) clearInterval(intervaloChecagemPedidos);
   sessionStorage.removeItem("fhcardapio_auth_" + SLUG_LOJA);
   document.getElementById("telaPainel").classList.remove("ativo");
   document.getElementById("telaLogin").style.display = "flex";
@@ -756,10 +813,123 @@ async function carregarTudo(){
   await Promise.all([carregarCategorias(), carregarConfig(), carregarClientes(), carregarVendas()]);
   await carregarItens();
   renderizarCategorias(); // re-renderiza pra atualizar a contagem de itens por categoria
+  iniciarChecagemPedidosNovos();
 }
 
 let pedidosCache = [];
 let periodoVendasAtual = "hoje";
+
+/* ============================================
+   NOTIFICAÇÃO DE PEDIDO NOVO (som + visual)
+   ============================================ */
+let somAtivado = false;
+let ultimoPedidoConhecidoEm = null;
+let pedidosNaoVistos = 0;
+let intervaloChecagemPedidos = null;
+let audioContext = null;
+
+function tocarSomNotificacao(){
+  if(!somAtivado) return;
+  try {
+    if(!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+    // Toca duas notas curtas, simulando um "ding-dong" de notificação
+    [880, 660].forEach((freq, i) => {
+      const osc = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+      osc.frequency.value = freq;
+      osc.type = "sine";
+      gain.gain.setValueAtTime(0.25, audioContext.currentTime + i * 0.18);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + i * 0.18 + 0.35);
+      osc.connect(gain);
+      gain.connect(audioContext.destination);
+      osc.start(audioContext.currentTime + i * 0.18);
+      osc.stop(audioContext.currentTime + i * 0.18 + 0.4);
+    });
+  } catch(e){
+    console.warn("Não foi possível tocar o som de notificação:", e);
+  }
+}
+
+document.getElementById("btnNotificacao").onclick = () => {
+  somAtivado = !somAtivado;
+  const btn = document.getElementById("btnNotificacao");
+  btn.classList.toggle("ativada", somAtivado);
+
+  if(somAtivado){
+    // Inicializa o contexto de áudio agora, enquanto temos interação do usuário
+    // (navegadores bloqueiam som sem isso)
+    if(!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    mostrarStatus("Som de notificação ativado. Deixe esta aba aberta para receber avisos.", "sucesso");
+  } else {
+    mostrarStatus("Som de notificação desativado.", "sucesso");
+  }
+};
+
+function iniciarChecagemPedidosNovos(){
+  if(pedidosCache.length > 0){
+    ultimoPedidoConhecidoEm = pedidosCache[0].criado_em; // o mais recente, já que vem ordenado desc
+  } else {
+    ultimoPedidoConhecidoEm = new Date(0).toISOString();
+  }
+
+  if(intervaloChecagemPedidos) clearInterval(intervaloChecagemPedidos);
+  intervaloChecagemPedidos = setInterval(checarPedidosNovos, 15000);
+}
+
+async function checarPedidosNovos(){
+  try {
+    const { data, error } = await supabaseClient
+      .from("cardapio_pedidos")
+      .select("*")
+      .eq("slug_loja", SLUG_LOJA)
+      .gt("criado_em", ultimoPedidoConhecidoEm)
+      .order("criado_em", { ascending: false });
+
+    if(error) throw error;
+    if(!data || data.length === 0) return;
+
+    ultimoPedidoConhecidoEm = data[0].criado_em;
+    pedidosNaoVistos += data.length;
+
+    // Atualiza o cache de vendas pra refletir o pedido novo nos números
+    pedidosCache = [...data, ...pedidosCache];
+    if(document.querySelector(".aba-btn.ativa")?.dataset.aba === "vendas"){
+      renderizarVendas();
+    }
+
+    tocarSomNotificacao();
+    mostrarBannerPedidoNovo(data.length);
+    atualizarBadgeNotificacao();
+  } catch(e){
+    console.warn("Erro ao checar pedidos novos:", e);
+  }
+}
+
+function atualizarBadgeNotificacao(){
+  const badge = document.getElementById("badgeNotificacao");
+  if(pedidosNaoVistos > 0){
+    badge.textContent = pedidosNaoVistos > 9 ? "9+" : pedidosNaoVistos;
+    badge.style.display = "flex";
+  } else {
+    badge.style.display = "none";
+  }
+}
+
+function mostrarBannerPedidoNovo(qtd){
+  const banner = document.getElementById("bannerPedidoNovo");
+  banner.textContent = qtd === 1
+    ? "🔔 Novo pedido recebido! Clique para ver."
+    : `🔔 ${qtd} novos pedidos recebidos! Clique para ver.`;
+  banner.style.display = "block";
+
+  banner.onclick = () => {
+    document.querySelector('[data-aba="vendas"]').click();
+    banner.style.display = "none";
+    pedidosNaoVistos = 0;
+    atualizarBadgeNotificacao();
+  };
+}
 
 async function carregarVendas(){
   document.getElementById("loadingVendas").style.display = "block";
