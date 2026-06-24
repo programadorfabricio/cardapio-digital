@@ -271,6 +271,11 @@ body{
   border-top: 1px solid var(--cor-card-borda);
 }
 
+.campo-estoque-aviso{
+  font-size: 12px;
+  color: var(--cor-creme-fraco);
+}
+
 .toggle-disponivel{
   display: flex;
   align-items: center;
@@ -1325,6 +1330,16 @@ function criarCardItem(item){
       </div>
     </div>
     <div class="campo-grupo">
+      <label class="toggle-disponivel" style="margin-bottom:8px;">
+        <div class="toggle-switch ${item.controla_estoque ? 'on' : ''}" data-toggle-estoque></div>
+        <span>Controlar estoque (ex: bebidas, doces)</span>
+      </label>
+      <div class="campo-estoque-qtd" style="display:${item.controla_estoque ? 'block' : 'none'};">
+        <label class="campo-label">Quantidade em estoque</label>
+        <input class="campo-input campo-estoque" type="number" min="0" step="1" value="${item.estoque || 0}">
+      </div>
+    </div>
+    <div class="campo-grupo">
       <label class="campo-label">Foto do item</label>
       <div class="foto-area">
         ${item.imagem_url
@@ -1338,10 +1353,13 @@ function criarCardItem(item){
       </div>
     </div>
     <div class="item-rodape">
-      <label class="toggle-disponivel">
+      <label class="toggle-disponivel campo-toggle-manual" style="display:${item.controla_estoque ? 'none' : 'flex'};">
         <div class="toggle-switch ${item.disponivel !== false ? 'on' : ''}" data-toggle-disponivel></div>
         <span>Disponível no cardápio</span>
       </label>
+      <span class="campo-estoque-aviso" style="display:${item.controla_estoque ? 'inline' : 'none'};">
+        ${item.estoque > 0 ? `✅ Disponível (${item.estoque} em estoque)` : "⚠️ Esgotado (estoque zerado)"}
+      </span>
       <div class="item-acoes">
         <button class="btn-remover-item" data-acao="remover">Remover</button>
         <button class="btn-salvar-item" data-acao="salvar">Salvar</button>
@@ -1351,6 +1369,14 @@ function criarCardItem(item){
 
   card.querySelector("[data-toggle-disponivel]").onclick = (e) => {
     e.target.classList.toggle("on");
+  };
+
+  card.querySelector("[data-toggle-estoque]").onclick = (e) => {
+    const ativo = !e.target.classList.contains("on");
+    e.target.classList.toggle("on");
+    card.querySelector(".campo-estoque-qtd").style.display = ativo ? "block" : "none";
+    card.querySelector(".campo-toggle-manual").style.display = ativo ? "none" : "flex";
+    card.querySelector(".campo-estoque-aviso").style.display = ativo ? "inline" : "none";
   };
 
   const inputArquivo = card.querySelector(".campo-input-arquivo");
@@ -1418,13 +1444,22 @@ async function fazerUploadFoto(card, arquivo){
 }
 
 async function salvarItem(card, id){
+  const controlaEstoque = card.querySelector("[data-toggle-estoque]").classList.contains("on");
+  const estoqueQtd = parseInt(card.querySelector(".campo-estoque").value) || 0;
+
   const payload = {
     categoria_id: card.querySelector(".campo-categoria").value || null,
     nome: card.querySelector(".campo-nome").value.trim(),
     descricao: card.querySelector(".campo-descricao").value.trim(),
     preco: parseFloat(card.querySelector(".campo-preco").value) || 0,
     imagem_url: card.dataset.imagemUrl || "",
-    disponivel: card.querySelector("[data-toggle-disponivel]").classList.contains("on")
+    controla_estoque: controlaEstoque,
+    estoque: controlaEstoque ? estoqueQtd : 0,
+    // Quando controla estoque, a disponibilidade é automática (depende da quantidade).
+    // Quando não controla, usa o toggle manual de sempre.
+    disponivel: controlaEstoque
+      ? estoqueQtd > 0
+      : card.querySelector("[data-toggle-disponivel]").classList.contains("on")
   };
 
   if(!payload.nome || !payload.categoria_id){

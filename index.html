@@ -1755,7 +1755,7 @@ async function registrarPedido(){
     const itensDoPedido = Object.keys(carrinho).map(id => {
       const item = buscarItem(id);
       if(!item) return null;
-      return { nome: item.nome, quantidade: carrinho[id], preco_unitario: item.preco };
+      return { id, nome: item.nome, quantidade: carrinho[id], preco_unitario: item.preco };
     }).filter(Boolean);
 
     if(itensDoPedido.length === 0) return null;
@@ -1767,12 +1767,22 @@ async function registrarPedido(){
       tipo_entrega: pedido.tipoEntrega,
       forma_pagamento: pedido.dividirPagamento ? "dividido" : pedido.formaPagamento,
       total: calcularTotal(),
-      itens: itensDoPedido,
+      itens: itensDoPedido.map(i => ({ nome: i.nome, quantidade: i.quantidade, preco_unitario: i.preco_unitario })),
       observacao: pedido.observacao || "",
       pix_confirmado: pedido.formaPagamento === "pix" ? pixPago : false,
     }).select().single();
 
     if(error) throw error;
+
+    // Decrementa o estoque dos itens que controlam estoque (não afeta os demais)
+    for(const item of itensDoPedido){
+      try {
+        await supabaseClient.rpc("decrementar_estoque", { item_id: item.id, quantidade: item.quantidade });
+      } catch(eEstoque){
+        console.warn("Não foi possível decrementar estoque de", item.nome, eEstoque);
+      }
+    }
+
     return data?.id || null;
   } catch(e){
     console.warn("Não foi possível registrar o pedido para relatório:", e);
