@@ -776,7 +776,8 @@ body{
    ============================================ */
 const SUPABASE_URL = "https://ahpdonsxsdxttmngimwd.supabase.co"; // ex: https://xxxxx.supabase.co
 const SUPABASE_ANON_KEY = "sb_publishable_f05x9dkPvuhJMN_ZWipgbw_-l-SWdp4";
-const SLUG_LOJA = "brasa-cia"; // identifica qual loja buscar no banco — troque por cliente
+const SLUG_LOJA_PADRAO = "brasa-cia"; // usado se a URL não tiver ?loja=, ou em testes locais
+const SLUG_LOJA = new URLSearchParams(window.location.search).get("loja") || SLUG_LOJA_PADRAO;
 
 let supabaseClient = null;
 try {
@@ -1746,9 +1747,18 @@ async function carregarDadosDaLoja(){
       .from("lojas_config")
       .select("*")
       .eq("slug_loja", SLUG_LOJA)
-      .single();
+      .maybeSingle();
 
     if(errConfig) throw errConfig;
+
+    // Se a URL pediu uma loja específica e ela não existe no banco, mostra erro claro
+    // em vez de silenciosamente cair nos dados fixos (que seriam de outro cliente)
+    const slugVeioDaUrl = new URLSearchParams(window.location.search).get("loja");
+    if(slugVeioDaUrl && !config){
+      mostrarErroLojaNaoEncontrada(slugVeioDaUrl);
+      throw new Error("Loja não encontrada: " + slugVeioDaUrl);
+    }
+
     if(config){
       NUMERO_WHATSAPP = config.numero_whatsapp || NUMERO_WHATSAPP;
       HORARIO_ABERTURA = config.horario_abertura || HORARIO_ABERTURA;
@@ -1839,6 +1849,20 @@ function aplicarEstadoAberto(){
   }
 }
 
+let lojaInvalida = false;
+
+function mostrarErroLojaNaoEncontrada(slug){
+  lojaInvalida = true;
+  document.body.innerHTML = `
+    <div style="min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; text-align:center; font-family:var(--fonte-corpo); color:var(--cor-creme); background:var(--cor-fundo);">
+      <div>
+        <div style="font-size:40px; margin-bottom:12px;">🔍</div>
+        <h2 style="font-family:var(--fonte-display); font-size:18px; margin-bottom:8px;">Cardápio não encontrado</h2>
+        <p style="font-size:13.5px; color:var(--cor-creme-fraco); max-width:320px;">Não encontramos nenhum cardápio com o endereço informado. Confira o link com quem te enviou.</p>
+      </div>
+    </div>`;
+}
+
 async function iniciar(){
   // Renderiza imediatamente com os dados fixos (fallback), pra nunca mostrar tela vazia
   renderizarCardapio();
@@ -1849,6 +1873,8 @@ async function iniciar(){
 
   // Busca os dados reais do Supabase em segundo plano e atualiza a tela quando chegar
   await carregarDadosDaLoja();
+  if(lojaInvalida) return; // já mostrou a tela de erro, não sobrescreve
+
   renderizarCardapio();
   Object.keys(carrinho).forEach(id => renderizarControle(id));
   atualizarCarrinhoFlutuante();

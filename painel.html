@@ -717,7 +717,8 @@ body{
    ============================================ */
 const SUPABASE_URL = "https://ahpdonsxsdxttmngimwd.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_f05x9dkPvuhJMN_ZWipgbw_-l-SWdp4";
-const SLUG_LOJA = "brasa-cia";
+const SLUG_LOJA_PADRAO = "brasa-cia"; // usado se a URL não tiver ?loja=, ou em testes locais
+const SLUG_LOJA = new URLSearchParams(window.location.search).get("loja") || SLUG_LOJA_PADRAO;
 
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -748,7 +749,7 @@ async function tentarLogin(){
       .single();
 
     if(error || !data){
-      erroEl.textContent = "Não foi possível verificar a senha. Tente novamente.";
+      erroEl.textContent = "Painel não encontrado para este endereço. Confira o link.";
       return;
     }
 
