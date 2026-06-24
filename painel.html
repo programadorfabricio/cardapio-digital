@@ -715,6 +715,21 @@ body{
       </div>
 
       <div class="config-card">
+        <h3>Tempo estimado de entrega</h3>
+        <div class="campo-linha">
+          <div>
+            <label class="campo-label">Mínimo (min)</label>
+            <input class="campo-input" type="number" id="cfgTempoMin" min="0" placeholder="25">
+          </div>
+          <div>
+            <label class="campo-label">Máximo (min)</label>
+            <input class="campo-input" type="number" id="cfgTempoMax" min="0" placeholder="35">
+          </div>
+        </div>
+        <p class="dica-texto" style="margin-top:10px;">O tempo mostrado pro cliente aumenta automaticamente quando há muitos pedidos abertos ao mesmo tempo (+10 min a cada 4 pedidos em aberto), pra evitar reclamação de atraso.</p>
+      </div>
+
+      <div class="config-card">
         <h3>Horário de funcionamento</h3>
         <div class="campo-linha">
           <div>
@@ -1228,6 +1243,8 @@ async function carregarConfig(){
 
     document.getElementById("cfgNome").value = data.nome_loja || "";
     document.getElementById("cfgWhatsapp").value = data.numero_whatsapp || "";
+    document.getElementById("cfgTempoMin").value = data.tempo_estimado_min || "";
+    document.getElementById("cfgTempoMax").value = data.tempo_estimado_max || "";
     document.getElementById("cfgAbertura").value = (data.horario_abertura || "00:00").slice(0,5);
     document.getElementById("cfgFechamento").value = (data.horario_fechamento || "23:59").slice(0,5);
 
@@ -1665,6 +1682,8 @@ document.getElementById("btnSalvarConfig").onclick = async () => {
   const payload = {
     nome_loja: document.getElementById("cfgNome").value.trim(),
     numero_whatsapp: document.getElementById("cfgWhatsapp").value.trim(),
+    tempo_estimado_min: parseInt(document.getElementById("cfgTempoMin").value, 10) || null,
+    tempo_estimado_max: parseInt(document.getElementById("cfgTempoMax").value, 10) || null,
     horario_abertura: document.getElementById("cfgAbertura").value,
     horario_fechamento: document.getElementById("cfgFechamento").value,
     aberto_manual: document.getElementById("switchAbertoManual").classList.contains("on")

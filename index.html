@@ -212,6 +212,80 @@ body{
 .categoria-oculta{ display:none !important; }
 .produto-oculto{ display:none !important; }
 
+/* ===== DESTAQUE: MAIS PEDIDOS ===== */
+.secao-destaque{
+  margin: 0 0 18px;
+  padding: 0 0 0 16px;
+}
+.secao-destaque .categoria-titulo{
+  padding: 0 16px 0 0;
+  margin-bottom: 10px;
+}
+.destaque-scroll{
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  padding-right: 16px;
+  scrollbar-width: none;
+}
+.destaque-scroll::-webkit-scrollbar{ display: none; }
+.destaque-card{
+  flex-shrink: 0;
+  width: 132px;
+  background: var(--cor-card);
+  border: 1px solid var(--cor-card-borda);
+  border-radius: 14px;
+  padding: 10px;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+.destaque-card:hover{ border-color: rgba(197,64,43,0.5); }
+.destaque-card-img-wrap{
+  position: relative;
+  width: 100%;
+  height: 88px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--cor-fundo-alt);
+  margin-bottom: 8px;
+}
+.destaque-card-img{
+  width: 100%; height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+.destaque-card-img.carregada{ opacity: 1; }
+.destaque-card-selo{
+  position: absolute;
+  top: 6px; left: 6px;
+  background: var(--cor-brasa);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 6px;
+  border-radius: 5px;
+}
+.destaque-card-nome{
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--cor-creme);
+  line-height: 1.3;
+  margin-bottom: 4px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.destaque-card-preco{
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--cor-dourado);
+}
+
 .produto{
   display:flex;
   gap:14px;
@@ -897,7 +971,7 @@ body{
   <h1>BRASA<br><span>&amp; CIA</span></h1>
   <p>Hambúrguer artesanal feito na brasa, pão na chapa e blend próprio. Veja o cardápio e peça direto por aqui.</p>
   <div class="hero-meta">
-    <div class="hero-meta-item">⏱ <b>25-35 min</b></div>
+    <div class="hero-meta-item">⏱ <b id="heroTempoEstimado">25-35 min</b></div>
     <div class="hero-meta-item">📍 <b>Retirada e entrega</b></div>
     <div class="hero-meta-item">⭐ <b>4.8</b> (320 avaliações)</div>
   </div>
@@ -908,6 +982,11 @@ body{
   <input type="text" id="inputBusca" class="busca-input" placeholder="Buscar no cardápio...">
   <button class="busca-limpar" id="btnLimparBusca" style="display:none;">✕</button>
 </div>
+
+<section class="secao-destaque" id="secaoDestaque" style="display:none;">
+  <div class="categoria-titulo">🔥 Mais pedidos</div>
+  <div class="destaque-scroll" id="destaqueScroll"></div>
+</section>
 
 <nav class="nav-cat" id="navCat"></nav>
 
@@ -960,6 +1039,8 @@ let NOME_PIX = "Brasa & Cia Lanches"; // nome do titular que aparece no Pix
 let HORARIO_ABERTURA = "00:00";
 let HORARIO_FECHAMENTO = "23:59";
 let LOJA_ABERTA_MANUAL = true;
+let TEMPO_ESTIMADO_MIN = 25; // tempo base (minutos), configurável no painel
+let TEMPO_ESTIMADO_MAX = 35;
 
 let cardapio = [
   {
@@ -1210,9 +1291,13 @@ function aplicarFiltroBusca(){
     }
   });
 
-  // Esconde a navegação de categorias durante a busca (não faz sentido navegar por categoria filtrada)
+  // Esconde a navegação de categorias e o destaque durante a busca
   const nav = document.getElementById("navCat");
   if(nav) nav.style.display = termo ? "none" : "";
+  const destaque = document.getElementById("secaoDestaque");
+  if(destaque && destaque.dataset.temConteudo === "true"){
+    destaque.style.display = termo ? "none" : "block";
+  }
 
   const buscaVazio = document.getElementById("buscaVazio");
   if(buscaVazio) buscaVazio.style.display = (termo && totalVisivel === 0) ? "block" : "none";
@@ -2056,6 +2141,8 @@ async function carregarDadosDaLoja(){
       HORARIO_ABERTURA = config.horario_abertura || HORARIO_ABERTURA;
       HORARIO_FECHAMENTO = config.horario_fechamento || HORARIO_FECHAMENTO;
       LOJA_ABERTA_MANUAL = config.aberto_manual !== false;
+      TEMPO_ESTIMADO_MIN = config.tempo_estimado_min || TEMPO_ESTIMADO_MIN;
+      TEMPO_ESTIMADO_MAX = config.tempo_estimado_max || TEMPO_ESTIMADO_MAX;
     }
 
     const { data: categorias, error: errCategorias } = await supabaseClient
@@ -2143,6 +2230,122 @@ function aplicarEstadoAberto(){
   }
 }
 
+/* ============================================
+   TEMPO ESTIMADO DINÂMICO
+   Soma minutos extras ao tempo base configurado no painel,
+   conforme o número de pedidos abertos (não entregues/cancelados)
+   nos últimos 90 minutos — evita reclamação de atraso na hora do rush.
+   ============================================ */
+const TEMPO_JANELA_PEDIDOS_MIN = 90; // só considera pedidos feitos nos últimos X minutos
+const TEMPO_PEDIDOS_POR_INCREMENTO = 4; // a cada X pedidos abertos...
+const TEMPO_INCREMENTO_MINUTOS = 10;     // ...soma Y minutos no tempo base
+
+async function atualizarTempoEstimado(){
+  const elTempo = document.getElementById("heroTempoEstimado");
+  if(!elTempo) return;
+
+  let extra = 0;
+
+  if(supabaseClient){
+    try {
+      const desde = new Date(Date.now() - TEMPO_JANELA_PEDIDOS_MIN * 60 * 1000).toISOString();
+      const { count, error } = await supabaseClient
+        .from("cardapio_pedidos")
+        .select("id", { count: "exact", head: true })
+        .eq("slug_loja", SLUG_LOJA)
+        .gte("created_at", desde)
+        .not("status", "in", '("entregue","cancelado")');
+
+      if(!error && typeof count === "number"){
+        extra = Math.floor(count / TEMPO_PEDIDOS_POR_INCREMENTO) * TEMPO_INCREMENTO_MINUTOS;
+      }
+    } catch(e){
+      console.warn("Não foi possível calcular pedidos abertos para o tempo estimado:", e);
+    }
+  }
+
+  const min = TEMPO_ESTIMADO_MIN + extra;
+  const max = TEMPO_ESTIMADO_MAX + extra;
+  elTempo.textContent = `${min}-${max} min`;
+}
+
+/* ============================================
+   ITENS MAIS PEDIDOS (destaque)
+   Calculado a partir do histórico real de cardapio_pedidos.itens,
+   somando quantidades por nome de item nos últimos 30 dias.
+   ============================================ */
+const DESTAQUE_JANELA_DIAS = 30;
+const DESTAQUE_QTD_ITENS = 4;
+
+async function atualizarDestaqueMaisPedidos(){
+  const secao = document.getElementById("secaoDestaque");
+  const scroll = document.getElementById("destaqueScroll");
+  if(!secao || !scroll || !supabaseClient) return;
+
+  try {
+    const desde = new Date(Date.now() - DESTAQUE_JANELA_DIAS * 24 * 60 * 60 * 1000).toISOString();
+    const { data: pedidos, error } = await supabaseClient
+      .from("cardapio_pedidos")
+      .select("itens")
+      .eq("slug_loja", SLUG_LOJA)
+      .gte("created_at", desde)
+      .neq("status", "cancelado")
+      .limit(500);
+
+    if(error) throw error;
+    if(!pedidos || pedidos.length === 0){ secao.style.display = "none"; secao.dataset.temConteudo = "false"; return; }
+
+    // Soma quantidade vendida por nome de item (chave estável entre pedidos antigos e o cardápio atual)
+    const vendasPorNome = {};
+    pedidos.forEach(p => {
+      (p.itens || []).forEach(i => {
+        if(!i || !i.nome) return;
+        vendasPorNome[i.nome] = (vendasPorNome[i.nome] || 0) + (i.quantidade || 0);
+      });
+    });
+
+    // Cruza com o cardápio atual — só mostra itens que existem e estão disponíveis hoje
+    const itensDisponiveisAgora = [];
+    cardapio.forEach(cat => {
+      cat.itens.forEach(item => {
+        if(item.disponivel !== false) itensDisponiveisAgora.push(item);
+      });
+    });
+
+    const ranking = itensDisponiveisAgora
+      .map(item => ({ item, vendas: vendasPorNome[item.nome] || 0 }))
+      .filter(r => r.vendas > 0)
+      .sort((a, b) => b.vendas - a.vendas)
+      .slice(0, DESTAQUE_QTD_ITENS);
+
+    if(ranking.length === 0){ secao.style.display = "none"; secao.dataset.temConteudo = "false"; return; }
+
+    scroll.innerHTML = ranking.map(({item}, idx) => `
+      <div class="destaque-card" onclick="document.getElementById('cat-' + ${Math.max(0, encontrarIndiceCategoria(item.id))}).scrollIntoView({behavior:'smooth', block:'start'})">
+        <div class="destaque-card-img-wrap">
+          ${idx === 0 ? `<span class="destaque-card-selo">Top vendas</span>` : ""}
+          <img class="destaque-card-img" src="${item.imagem_url}" alt="${item.nome}" loading="lazy" onload="this.classList.add('carregada')" onerror="this.style.display='none'">
+        </div>
+        <div class="destaque-card-nome">${item.nome}</div>
+        <div class="destaque-card-preco">${formatarPreco(item.preco)}</div>
+      </div>`).join("");
+
+    secao.style.display = "block";
+    secao.dataset.temConteudo = "true";
+  } catch(e){
+    console.warn("Não foi possível calcular itens mais pedidos:", e);
+    secao.style.display = "none";
+    secao.dataset.temConteudo = "false";
+  }
+}
+
+function encontrarIndiceCategoria(itemId){
+  for(let idx = 0; idx < cardapio.length; idx++){
+    if(cardapio[idx].itens.some(i => i.id === itemId)) return idx;
+  }
+  return 0;
+}
+
 let lojaInvalida = false;
 
 function mostrarErroLojaNaoEncontrada(slug){
@@ -2173,6 +2376,8 @@ async function iniciar(){
   Object.keys(carrinho).forEach(id => renderizarControle(id));
   atualizarCarrinhoFlutuante();
   aplicarEstadoAberto();
+  atualizarTempoEstimado();
+  atualizarDestaqueMaisPedidos();
 
   iniciarAtualizacaoSilenciosa();
 }
@@ -2200,6 +2405,7 @@ function iniciarAtualizacaoSilenciosa(){
     Object.keys(carrinho).forEach(id => renderizarControle(id));
     atualizarCarrinhoFlutuante();
     aplicarEstadoAberto();
+    atualizarTempoEstimado();
 
     // Se algum item do carrinho do cliente ficou indisponível ou foi removido
     // nesse meio tempo, avisa e tira do carrinho — em vez de deixar ele
