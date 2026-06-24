@@ -1088,7 +1088,18 @@ function renderizarControle(id){
 }
 
 function adicionar(id){
-  carrinho[id] = (carrinho[id] || 0) + 1;
+  const item = buscarItem(id);
+  if(!item) return;
+
+  const qtdAtualNoCarrinho = carrinho[id] || 0;
+
+  // Se o item controla estoque, não deixa passar do limite disponível
+  if(item.controla_estoque && qtdAtualNoCarrinho >= item.estoque){
+    alert(`Só temos ${item.estoque} unidade${item.estoque === 1 ? "" : "s"} de "${item.nome}" em estoque.`);
+    return;
+  }
+
+  carrinho[id] = qtdAtualNoCarrinho + 1;
   salvarCarrinhoLocal();
   renderizarControle(id);
   atualizarCarrinhoFlutuante();
@@ -1904,7 +1915,9 @@ async function carregarDadosDaLoja(){
             descricao: item.descricao,
             preco: parseFloat(item.preco),
             imagem_url: item.imagem_url,
-            disponivel: item.disponivel !== false
+            disponivel: item.disponivel !== false,
+            controla_estoque: item.controla_estoque === true,
+            estoque: item.estoque || 0
           }))
       })).filter(cat => cat.itens.length > 0); // não mostra categoria vazia pro cliente
 
