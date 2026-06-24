@@ -164,6 +164,54 @@ body{
   letter-spacing:0;
 }
 
+/* ===== BUSCA ===== */
+.busca-wrap{
+  position: relative;
+  margin: 0 16px 12px;
+  display:flex;
+  align-items:center;
+}
+.busca-icone{
+  position:absolute;
+  left:14px;
+  font-size:15px;
+  opacity:0.6;
+  pointer-events:none;
+}
+.busca-input{
+  width:100%;
+  padding:12px 38px;
+  background: var(--cor-card);
+  border:1px solid var(--cor-card-borda);
+  border-radius:12px;
+  color: var(--cor-creme);
+  font-family: var(--fonte-corpo);
+  font-size:14px;
+  outline:none;
+  transition: border-color 0.2s ease;
+}
+.busca-input::placeholder{ color: var(--cor-creme-fraco); }
+.busca-input:focus{ border-color: var(--cor-brasa); }
+.busca-limpar{
+  position:absolute;
+  right:10px;
+  background:none;
+  border:none;
+  color: var(--cor-creme-fraco);
+  font-size:14px;
+  padding:6px;
+  cursor:pointer;
+  line-height:1;
+}
+.busca-vazio{
+  text-align:center;
+  color: var(--cor-creme-fraco);
+  font-size:13.5px;
+  padding:32px 20px;
+}
+.categoria-oculta{ display:none !important; }
+.produto-oculto{ display:none !important; }
+
 .produto{
   display:flex;
   gap:14px;
@@ -180,6 +228,27 @@ body{
   width: 84px;
   height: 84px;
   flex-shrink: 0;
+  background: var(--cor-fundo-alt);
+  border-radius:10px;
+  overflow:hidden;
+}
+.produto-img-wrap.carregando::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  background: linear-gradient(
+    90deg,
+    var(--cor-fundo-alt) 0%,
+    rgba(245,235,220,0.08) 50%,
+    var(--cor-fundo-alt) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeletonPulso 1.3s ease-in-out infinite;
+  z-index:1;
+}
+@keyframes skeletonPulso{
+  0%{ background-position: 200% 0; }
+  100%{ background-position: -200% 0; }
 }
 .produto-img{
   width:84px; height:84px;
@@ -187,7 +256,12 @@ body{
   flex-shrink:0;
   object-fit:cover;
   background: var(--cor-fundo-alt);
+  position: relative;
+  z-index:2;
+  opacity: 0;
+  transition: opacity 0.25s ease;
 }
+.produto-img.carregada{ opacity: 1; }
 .selo-esgotado{
   position: absolute;
   bottom: 4px;
@@ -357,10 +431,15 @@ body{
 }
 .modal-item{
   display:flex;
-  justify-content:space-between;
-  align-items:center;
+  flex-direction: column;
+  gap: 6px;
   padding:10px 0;
   border-bottom:1px solid var(--cor-card-borda);
+}
+.modal-item-linha{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
   gap:10px;
 }
 .modal-item-info{ flex: 1; min-width: 0; }
@@ -373,6 +452,20 @@ body{
   gap: 10px;
   flex-shrink: 0;
 }
+.modal-item-obs{
+  width:100%;
+  padding:7px 10px;
+  background: var(--cor-fundo-alt);
+  border:1px solid var(--cor-card-borda);
+  border-radius:8px;
+  color: var(--cor-creme);
+  font-family: var(--fonte-corpo);
+  font-size:12.5px;
+  outline:none;
+  transition: border-color 0.2s ease;
+}
+.modal-item-obs::placeholder{ color: var(--cor-creme-fraco); opacity:0.7; }
+.modal-item-obs:focus{ border-color: var(--cor-brasa); }
 .qtd-control-modal{
   display: flex;
   align-items: center;
@@ -810,9 +903,16 @@ body{
   </div>
 </div>
 
+<div class="busca-wrap">
+  <span class="busca-icone">🔍</span>
+  <input type="text" id="inputBusca" class="busca-input" placeholder="Buscar no cardápio...">
+  <button class="busca-limpar" id="btnLimparBusca" style="display:none;">✕</button>
+</div>
+
 <nav class="nav-cat" id="navCat"></nav>
 
 <main id="categorias"></main>
+<div class="busca-vazio" id="buscaVazio" style="display:none;">Nenhum item encontrado.</div>
 
 <div class="aviso-demo">Este é um cardápio <b>demonstrativo</b> criado pela <b>FH Digital</b>. Os pedidos são enviados via WhatsApp.</div>
 
@@ -941,6 +1041,7 @@ let cardapio = [
 const CHAVE_STORAGE = "fhcardapio_carrinho_" + (typeof SLUG_LOJA !== "undefined" ? SLUG_LOJA : "padrao");
 
 let carrinho = {}; // { id: quantidade }
+let observacoes = {}; // { id: "texto da observação do item" }
 let etapaAtual = "carrinho"; // carrinho | entrega | pagamento
 let totalPedidosClienteAtual = 0; // quantos pedidos esse cliente já fez antes deste (0 = é o primeiro)
 
@@ -958,7 +1059,7 @@ let pedido = {
 
 function salvarCarrinhoLocal(){
   try {
-    localStorage.setItem(CHAVE_STORAGE, JSON.stringify({ carrinho, pedido, salvoEm: Date.now() }));
+    localStorage.setItem(CHAVE_STORAGE, JSON.stringify({ carrinho, observacoes, pedido, salvoEm: Date.now() }));
   } catch(e){
     console.warn("Não foi possível salvar o carrinho localmente.", e);
   }
@@ -986,6 +1087,15 @@ function carregarCarrinhoLocal(){
     });
 
     carrinho = carrinhoFiltrado;
+
+    const observacoesFiltradas = {};
+    if(salvo.observacoes){
+      Object.keys(salvo.observacoes).forEach(id => {
+        if(carrinhoFiltrado[id]) observacoesFiltradas[id] = salvo.observacoes[id];
+      });
+    }
+    observacoes = observacoesFiltradas;
+
     if(salvo.pedido) pedido = Object.assign(pedido, salvo.pedido);
   } catch(e){
     console.warn("Não foi possível carregar o carrinho salvo.", e);
@@ -1038,15 +1148,18 @@ function renderizarCardapio(){
     const secao = document.createElement("section");
     secao.className = "categoria";
     secao.id = "cat-" + idx;
+    secao.dataset.totalOriginal = cat.itens.length;
     secao.innerHTML = `<div class="categoria-titulo">${cat.categoria} <small>${cat.itens.length} ${cat.itens.length === 1 ? 'item' : 'itens'}</small></div>`;
 
     cat.itens.forEach(item => {
       const esgotado = item.disponivel === false;
       const div = document.createElement("div");
       div.className = "produto" + (esgotado ? " produto-esgotado" : "");
+      div.dataset.nome = item.nome.toLowerCase();
+      div.dataset.desc = (item.descricao || "").toLowerCase();
       div.innerHTML = `
-        <div class="produto-img-wrap">
-          <img class="produto-img" src="${item.imagem_url}" alt="${item.nome}" onerror="this.style.display='none'">
+        <div class="produto-img-wrap carregando">
+          <img class="produto-img" src="${item.imagem_url}" alt="${item.nome}" loading="lazy" onload="this.classList.add('carregada'); this.parentElement.classList.remove('carregando');" onerror="this.style.display='none'; this.parentElement.classList.remove('carregando');">
           ${esgotado ? `<div class="selo-esgotado">Esgotado</div>` : ""}
         </div>
         <div class="produto-info">
@@ -1068,6 +1181,41 @@ function renderizarCardapio(){
 
     main.appendChild(secao);
   });
+
+  aplicarFiltroBusca();
+}
+
+/* ===== BUSCA / FILTRO ===== */
+function aplicarFiltroBusca(){
+  const input = document.getElementById("inputBusca");
+  const termo = input ? input.value.trim().toLowerCase() : "";
+  const btnLimpar = document.getElementById("btnLimparBusca");
+  if(btnLimpar) btnLimpar.style.display = termo ? "block" : "none";
+
+  let totalVisivel = 0;
+
+  document.querySelectorAll(".categoria").forEach(secao => {
+    let visiveisNaCategoria = 0;
+    secao.querySelectorAll(".produto").forEach(card => {
+      const bate = !termo || card.dataset.nome.includes(termo) || card.dataset.desc.includes(termo);
+      card.classList.toggle("produto-oculto", !bate);
+      if(bate){ visiveisNaCategoria++; totalVisivel++; }
+    });
+    secao.classList.toggle("categoria-oculta", visiveisNaCategoria === 0);
+
+    const contador = secao.querySelector(".categoria-titulo small");
+    if(contador){
+      const totalParaMostrar = termo ? visiveisNaCategoria : parseInt(secao.dataset.totalOriginal, 10);
+      contador.textContent = `${totalParaMostrar} ${totalParaMostrar === 1 ? 'item' : 'itens'}`;
+    }
+  });
+
+  // Esconde a navegação de categorias durante a busca (não faz sentido navegar por categoria filtrada)
+  const nav = document.getElementById("navCat");
+  if(nav) nav.style.display = termo ? "none" : "";
+
+  const buscaVazio = document.getElementById("buscaVazio");
+  if(buscaVazio) buscaVazio.style.display = (termo && totalVisivel === 0) ? "block" : "none";
 }
 
 function renderizarControle(id){
@@ -1118,10 +1266,17 @@ function remover(id){
 
 function removerItemTotalmente(id){
   delete carrinho[id];
+  delete observacoes[id];
   salvarCarrinhoLocal();
   renderizarControle(id);
   atualizarCarrinhoFlutuante();
   if(document.getElementById("modalCarrinho").classList.contains("aberto") && etapaAtual === "carrinho") renderizarEtapaCarrinho();
+}
+
+function atualizarObservacaoItem(id, texto){
+  if(texto && texto.trim()) observacoes[id] = texto.trim();
+  else delete observacoes[id];
+  salvarCarrinhoLocal();
 }
 
 function atualizarCarrinhoFlutuante(){
@@ -1153,6 +1308,9 @@ function renderizarEtapaCarrinho(){
   Object.keys(carrinho).forEach(id => {
     if(!buscarItem(id)) delete carrinho[id];
   });
+  Object.keys(observacoes).forEach(id => {
+    if(!carrinho[id]) delete observacoes[id];
+  });
   salvarCarrinhoLocal();
 
   const ids = Object.keys(carrinho);
@@ -1165,19 +1323,22 @@ function renderizarEtapaCarrinho(){
       const qtd = carrinho[id];
       return `
         <div class="modal-item">
-          <div class="modal-item-info">
-            <div class="modal-item-nome">${item.nome}</div>
-            <div class="modal-item-sub">${formatarPreco(item.preco)} cada</div>
-          </div>
-          <div class="modal-item-controles">
-            <div class="qtd-control qtd-control-modal">
-              <button onclick="remover('${id}')">−</button>
-              <span>${qtd}</span>
-              <button onclick="adicionar('${id}')">+</button>
+          <div class="modal-item-linha">
+            <div class="modal-item-info">
+              <div class="modal-item-nome">${item.nome}</div>
+              <div class="modal-item-sub">${formatarPreco(item.preco)} cada</div>
             </div>
-            <div class="modal-item-preco">${formatarPreco(item.preco * qtd)}</div>
-            <button class="btn-remover-modal" onclick="removerItemTotalmente('${id}')" title="Remover item">🗑</button>
+            <div class="modal-item-controles">
+              <div class="qtd-control qtd-control-modal">
+                <button onclick="remover('${id}')">−</button>
+                <span>${qtd}</span>
+                <button onclick="adicionar('${id}')">+</button>
+              </div>
+              <div class="modal-item-preco">${formatarPreco(item.preco * qtd)}</div>
+              <button class="btn-remover-modal" onclick="removerItemTotalmente('${id}')" title="Remover item">🗑</button>
+            </div>
           </div>
+          <input type="text" class="modal-item-obs" placeholder="Ex: sem cebola, ponto da carne, etc." value="${(observacoes[id] || '').replace(/"/g, '&quot;')}" oninput="atualizarObservacaoItem('${id}', this.value)">
         </div>`;
     }).join("");
   }
@@ -1522,6 +1683,7 @@ function montarMensagemWhatsApp(){
     if(!item) return;
     const qtd = carrinho[id];
     msg += `• ${qtd}x ${item.nome} — ${formatarPreco(item.preco * qtd)}\n`;
+    if(observacoes[id]) msg += `   ↳ _${observacoes[id]}_\n`;
   });
   msg += `\n*Total: ${formatarPreco(calcularTotal())}*\n`;
 
@@ -1754,6 +1916,7 @@ function enviarPedidoWhatsApp(){
   const idsAntigos = Object.keys(carrinho);
   limparCarrinhoLocal();
   carrinho = {};
+  observacoes = {};
   idsAntigos.forEach(id => renderizarControle(id));
   atualizarCarrinhoFlutuante();
   fecharModalCarrinho();
@@ -1766,7 +1929,7 @@ async function registrarPedido(){
     const itensDoPedido = Object.keys(carrinho).map(id => {
       const item = buscarItem(id);
       if(!item) return null;
-      return { id, nome: item.nome, quantidade: carrinho[id], preco_unitario: item.preco };
+      return { id, nome: item.nome, quantidade: carrinho[id], preco_unitario: item.preco, observacao: observacoes[id] || "" };
     }).filter(Boolean);
 
     if(itensDoPedido.length === 0) return null;
@@ -1778,7 +1941,7 @@ async function registrarPedido(){
       tipo_entrega: pedido.tipoEntrega,
       forma_pagamento: pedido.dividirPagamento ? "dividido" : pedido.formaPagamento,
       total: calcularTotal(),
-      itens: itensDoPedido.map(i => ({ nome: i.nome, quantidade: i.quantidade, preco_unitario: i.preco_unitario })),
+      itens: itensDoPedido.map(i => ({ nome: i.nome, quantidade: i.quantidade, preco_unitario: i.preco_unitario, observacao: i.observacao })),
       observacao: pedido.observacao || "",
       pix_confirmado: pedido.formaPagamento === "pix" ? pixPago : false,
     }).select().single();
@@ -1857,6 +2020,13 @@ function fecharModalCarrinho(){
 
 document.getElementById("fecharModal").onclick = fecharModalCarrinho;
 document.getElementById("overlay").onclick = fecharModalCarrinho;
+
+document.getElementById("inputBusca").addEventListener("input", aplicarFiltroBusca);
+document.getElementById("btnLimparBusca").onclick = () => {
+  document.getElementById("inputBusca").value = "";
+  aplicarFiltroBusca();
+  document.getElementById("inputBusca").focus();
+};
 
 /* ============================================
    CARREGAMENTO DE DADOS (Supabase com fallback pros dados fixos acima)
