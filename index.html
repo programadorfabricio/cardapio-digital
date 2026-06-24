@@ -1928,6 +1928,69 @@ async function iniciar(){
   Object.keys(carrinho).forEach(id => renderizarControle(id));
   atualizarCarrinhoFlutuante();
   aplicarEstadoAberto();
+
+  iniciarAtualizacaoSilenciosa();
+}
+
+/* ============================================
+   ATUALIZAÇÃO SILENCIOSA DO CARDÁPIO
+   Busca os dados de novo periodicamente, sem recarregar a página
+   nem interromper o cliente no meio do checkout.
+   ============================================ */
+let cardapioAnteriorParaAviso = [];
+
+function iniciarAtualizacaoSilenciosa(){
+  if(!supabaseClient) return;
+
+  setInterval(async () => {
+    if(lojaInvalida) return;
+
+    const idsCarrinhoAntes = Object.keys(carrinho);
+    cardapioAnteriorParaAviso = cardapio; // guarda referência antes de sobrescrever
+
+    await carregarDadosDaLoja();
+    if(lojaInvalida) return;
+
+    renderizarCardapio();
+    Object.keys(carrinho).forEach(id => renderizarControle(id));
+    atualizarCarrinhoFlutuante();
+    aplicarEstadoAberto();
+
+    // Se algum item do carrinho do cliente ficou indisponível ou foi removido
+    // nesse meio tempo, avisa e tira do carrinho — em vez de deixar ele
+    // tentar finalizar um pedido com item que não existe mais.
+    const itensIndisponiveis = idsCarrinhoAntes.filter(id => {
+      const item = buscarItem(id);
+      return !item || item.disponivel === false;
+    });
+
+    if(itensIndisponiveis.length > 0){
+      const nomes = itensIndisponiveis.map(id => {
+        const itemAntigo = buscarItemEmCardapioAntigo(id);
+        return itemAntigo ? itemAntigo.nome : "um item";
+      });
+
+      itensIndisponiveis.forEach(id => delete carrinho[id]);
+      salvarCarrinhoLocal();
+      atualizarCarrinhoFlutuante();
+
+      // Se o modal de carrinho/checkout estiver aberto, re-renderiza a etapa atual
+      // pra refletir a remoção, e avisa o cliente com uma mensagem clara
+      if(document.getElementById("modalCarrinho").classList.contains("aberto")){
+        if(etapaAtual === "carrinho") renderizarEtapaCarrinho();
+        alert(`Ops! ${nomes.join(", ")} ${itensIndisponiveis.length === 1 ? "ficou" : "ficaram"} indisponível e foi removido do seu pedido. Por favor, revise antes de continuar.`);
+      }
+    }
+  }, 30000); // a cada 30 segundos
+}
+
+// Função auxiliar usada acima pra recuperar o nome de um item que já não existe mais em "cardapio"
+function buscarItemEmCardapioAntigo(id){
+  for(const cat of cardapioAnteriorParaAviso){
+    const item = cat.itens.find(i => i.id === id);
+    if(item) return item;
+  }
+  return null;
 }
 
 iniciar();
