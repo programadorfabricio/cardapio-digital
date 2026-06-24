@@ -878,6 +878,8 @@ const CHAVE_STORAGE = "fhcardapio_carrinho_" + (typeof SLUG_LOJA !== "undefined"
 
 let carrinho = {}; // { id: quantidade }
 let etapaAtual = "carrinho"; // carrinho | entrega | pagamento
+let totalPedidosClienteAtual = 0; // quantos pedidos esse cliente já fez antes deste (0 = é o primeiro)
+
 let pedido = {
   nome: "",
   telefone: "",
@@ -1218,6 +1220,7 @@ async function buscarClientePorTelefone(telefoneNumeros){
       pedido.endereco.numero = data.endereco_numero || "";
       pedido.endereco.bairro = data.endereco_bairro || "";
       pedido.endereco.complemento = data.endereco_complemento || "";
+      totalPedidosClienteAtual = data.total_pedidos || 0;
       salvarCarrinhoLocal();
 
       statusElAtual.textContent = `Bem-vindo de volta, ${data.nome.split(" ")[0]}! Seus dados foram preenchidos.`;
@@ -1225,6 +1228,7 @@ async function buscarClientePorTelefone(telefoneNumeros){
 
       renderizarEtapaEntrega(); // re-renderiza pra mostrar nome e endereço preenchidos
     } else {
+      totalPedidosClienteAtual = 0;
       statusElAtual.textContent = "Cliente novo — preencha seus dados abaixo.";
       statusElAtual.className = "cliente-status";
     }
@@ -1448,6 +1452,11 @@ function montarMensagemWhatsApp(){
     msg += `\n\n📝 *Observações:* ${pedido.observacao.trim()}`;
   }
 
+  if(totalPedidosClienteAtual < 2){
+    const urlAvaliacao = `${window.location.origin}${window.location.pathname.replace(/[^/]*$/, "")}avaliar.html?loja=${SLUG_LOJA}`;
+    msg += `\n\n⭐ Esperamos que goste do seu pedido! Quando puder, deixe sua avaliação: ${urlAvaliacao}`;
+  }
+
   return encodeURIComponent(msg.trim());
 }
 
@@ -1652,7 +1661,7 @@ function enviarPedidoWhatsApp(){
 }
 
 async function registrarPedido(){
-  if(!supabaseClient) return;
+  if(!supabaseClient) return null;
 
   try {
     const itensDoPedido = Object.keys(carrinho).map(id => {
@@ -1661,9 +1670,9 @@ async function registrarPedido(){
       return { nome: item.nome, quantidade: carrinho[id], preco_unitario: item.preco };
     }).filter(Boolean);
 
-    if(itensDoPedido.length === 0) return;
+    if(itensDoPedido.length === 0) return null;
 
-    await supabaseClient.from("cardapio_pedidos").insert({
+    const { data, error } = await supabaseClient.from("cardapio_pedidos").insert({
       slug_loja: SLUG_LOJA,
       nome_cliente: pedido.nome,
       telefone_cliente: (pedido.telefone || "").replace(/\D/g, ""),
@@ -1673,9 +1682,13 @@ async function registrarPedido(){
       itens: itensDoPedido,
       observacao: pedido.observacao || "",
       pix_confirmado: pedido.formaPagamento === "pix" ? pixPago : false,
-    });
+    }).select().single();
+
+    if(error) throw error;
+    return data?.id || null;
   } catch(e){
     console.warn("Não foi possível registrar o pedido para relatório:", e);
+    return null;
   }
 }
 

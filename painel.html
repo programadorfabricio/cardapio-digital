@@ -523,6 +523,25 @@ body{
   padding: 30px 0;
 }
 
+/* ===== AVALIAÇÕES ===== */
+.avaliacao-card{
+  background: var(--cor-card);
+  border: 1px solid var(--cor-card-borda);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 8px;
+}
+.avaliacao-topo{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.avaliacao-nome{ font-size: 13.5px; font-weight: 600; color: var(--cor-creme); }
+.avaliacao-estrelas{ color: var(--cor-dourado); font-size: 13px; letter-spacing: 1px; }
+.avaliacao-comentario{ font-size: 13px; color: var(--cor-creme-fraco); line-height: 1.4; }
+.avaliacao-data{ font-size: 11px; color: var(--cor-creme-fraco); margin-top: 6px; }
+
 /* ===== CLIENTES ===== */
 .cliente-card{
   background: var(--cor-card);
@@ -652,6 +671,10 @@ body{
       </div>
       <div class="loading" id="loadingVendas">Carregando vendas...</div>
       <div id="resumoVendas"></div>
+
+      <div class="ranking-titulo" style="margin-top:28px;">Avaliações dos clientes</div>
+      <div class="loading" id="loadingAvaliacoes">Carregando avaliações...</div>
+      <div id="listaAvaliacoes"></div>
     </div>
 
     <div class="aba-conteudo" id="abaItens">
@@ -811,10 +834,51 @@ function mostrarStatus(msg, tipo){
    CARREGAMENTO
    ============================================ */
 async function carregarTudo(){
-  await Promise.all([carregarCategorias(), carregarConfig(), carregarClientes(), carregarVendas()]);
+  await Promise.all([carregarCategorias(), carregarConfig(), carregarClientes(), carregarVendas(), carregarAvaliacoes()]);
   await carregarItens();
   renderizarCategorias(); // re-renderiza pra atualizar a contagem de itens por categoria
   iniciarChecagemPedidosNovos();
+}
+
+async function carregarAvaliacoes(){
+  document.getElementById("loadingAvaliacoes").style.display = "block";
+  try {
+    const { data, error } = await supabaseClient
+      .from("cardapio_avaliacoes")
+      .select("*")
+      .eq("slug_loja", SLUG_LOJA)
+      .order("criado_em", { ascending: false })
+      .limit(20);
+
+    if(error) throw error;
+    renderizarAvaliacoes(data || []);
+  } catch(e){
+    mostrarStatus("Erro ao carregar avaliações: " + e.message, "erro");
+  }
+  document.getElementById("loadingAvaliacoes").style.display = "none";
+}
+
+function renderizarAvaliacoes(avaliacoes){
+  const container = document.getElementById("listaAvaliacoes");
+
+  if(avaliacoes.length === 0){
+    container.innerHTML = `<p class="vendas-vazio">Nenhuma avaliação recebida ainda.</p>`;
+    return;
+  }
+
+  container.innerHTML = avaliacoes.map(av => {
+    const estrelas = "★".repeat(av.nota) + "☆".repeat(5 - av.nota);
+    const data = new Date(av.criado_em).toLocaleDateString("pt-BR");
+    return `
+      <div class="avaliacao-card">
+        <div class="avaliacao-topo">
+          <span class="avaliacao-nome">${av.nome_cliente}</span>
+          <span class="avaliacao-estrelas">${estrelas}</span>
+        </div>
+        ${av.comentario ? `<div class="avaliacao-comentario">"${av.comentario}"</div>` : ""}
+        <div class="avaliacao-data">${data}</div>
+      </div>`;
+  }).join("");
 }
 
 let pedidosCache = [];

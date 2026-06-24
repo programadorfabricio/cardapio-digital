@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Avalie seu pedido</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+
+:root{
+  --cor-fundo: #1A1410;
+  --cor-fundo-alt: #221A14;
+  --cor-card: #2B2018;
+  --cor-card-borda: #3D2B1F;
+  --cor-brasa: #C5402B;
+  --cor-brasa-clara: #E15A3F;
+  --cor-dourado: #E8B649;
+  --cor-creme: #F5EBDC;
+  --cor-creme-fraco: #C9BCA9;
+  --cor-verde: #4A7C59;
+  --fonte-display: 'Anton', sans-serif;
+  --fonte-corpo: 'Inter', sans-serif;
+}
+
+*{ margin:0; padding:0; box-sizing:border-box; }
+body{
+  background: var(--cor-fundo);
+  color: var(--cor-creme);
+  font-family: var(--fonte-corpo);
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.card{
+  background: var(--cor-card);
+  border: 1px solid var(--cor-card-borda);
+  border-radius: 18px;
+  padding: 32px 26px;
+  width: 100%;
+  max-width: 380px;
+  text-align: center;
+}
+
+.card h1{
+  font-family: var(--fonte-display);
+  font-size: 22px;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+.card p{
+  font-size: 13.5px;
+  color: var(--cor-creme-fraco);
+  margin-bottom: 24px;
+  line-height: 1.5;
+}
+
+.estrelas{
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-bottom: 24px;
+}
+.estrela{
+  font-size: 38px;
+  cursor: pointer;
+  color: var(--cor-card-borda);
+  transition: transform 0.1s ease, color 0.15s ease;
+  user-select: none;
+}
+.estrela:hover{ transform: scale(1.1); }
+.estrela.marcada{ color: var(--cor-dourado); }
+
+.campo-grupo{ margin-bottom: 16px; text-align: left; }
+.campo-label{
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cor-creme-fraco);
+  margin-bottom: 6px;
+  display: block;
+}
+.campo-input, .campo-textarea{
+  width: 100%;
+  background: var(--cor-fundo-alt);
+  border: 1px solid var(--cor-card-borda);
+  border-radius: 10px;
+  padding: 11px 13px;
+  color: var(--cor-creme);
+  font-family: var(--fonte-corpo);
+  font-size: 14px;
+  outline: none;
+}
+.campo-textarea{ resize: vertical; min-height: 70px; }
+.campo-input:focus, .campo-textarea:focus{ border-color: var(--cor-brasa); }
+
+.btn-enviar{
+  width: 100%;
+  background: var(--cor-brasa);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 13px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 8px;
+}
+.btn-enviar:hover{ background: var(--cor-brasa-clara); }
+.btn-enviar:disabled{ opacity: 0.5; cursor: not-allowed; }
+
+.msg-erro{
+  font-size: 12.5px;
+  color: var(--cor-brasa-clara);
+  margin-top: 10px;
+  min-height: 16px;
+}
+
+.tela-sucesso{ display: none; }
+.tela-sucesso .icone{ font-size: 48px; margin-bottom: 10px; }
+.tela-sucesso h1{ margin-bottom: 8px; }
+.tela-sucesso p{ margin-bottom: 0; }
+
+.tela-erro{ display: none; }
+.tela-erro .icone{ font-size: 44px; margin-bottom: 10px; }
+
+</style>
+</head>
+<body>
+
+<div class="card" id="telaAvaliacao">
+  <h1>Como foi seu pedido?</h1>
+  <p>Sua opinião ajuda muito o nosso negócio a crescer.</p>
+
+  <div class="estrelas" id="estrelas">
+    <span class="estrela" data-valor="1">★</span>
+    <span class="estrela" data-valor="2">★</span>
+    <span class="estrela" data-valor="3">★</span>
+    <span class="estrela" data-valor="4">★</span>
+    <span class="estrela" data-valor="5">★</span>
+  </div>
+
+  <div class="campo-grupo">
+    <label class="campo-label">Seu nome</label>
+    <input class="campo-input" id="inputNomeAvaliacao" placeholder="Como podemos te chamar?">
+  </div>
+
+  <div class="campo-grupo">
+    <label class="campo-label">Comentário (opcional)</label>
+    <textarea class="campo-textarea" id="inputComentario" placeholder="Conte como foi sua experiência..."></textarea>
+  </div>
+
+  <button class="btn-enviar" id="btnEnviarAvaliacao" disabled>Enviar avaliação</button>
+  <div class="msg-erro" id="msgErroAvaliacao"></div>
+</div>
+
+<div class="card tela-sucesso" id="telaSucesso">
+  <div class="icone">🙏</div>
+  <h1>Obrigado!</h1>
+  <p>Sua avaliação foi enviada com sucesso. Agradecemos por compartilhar sua experiência!</p>
+</div>
+
+<div class="card tela-erro" id="telaErro">
+  <div class="icone">🔍</div>
+  <h1>Não encontramos esse link</h1>
+  <p>Confira o link enviado, ou entre em contato com quem te atendeu.</p>
+</div>
+
+<script>
+const SUPABASE_URL = "https://ahpdonsxsdxttmngimwd.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_f05x9dkPvuhJMN_ZWipgbw_-l-SWdp4";
+const SLUG_LOJA = new URLSearchParams(window.location.search).get("loja");
+
+if(!SLUG_LOJA){
+  document.getElementById("telaAvaliacao").style.display = "none";
+  document.getElementById("telaErro").style.display = "block";
+} else {
+  const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  let notaSelecionada = 0;
+
+  document.querySelectorAll(".estrela").forEach(estrela => {
+    estrela.onclick = () => {
+      notaSelecionada = parseInt(estrela.dataset.valor);
+      document.querySelectorAll(".estrela").forEach(e => {
+        e.classList.toggle("marcada", parseInt(e.dataset.valor) <= notaSelecionada);
+      });
+      atualizarBotaoEnviar();
+    };
+  });
+
+  document.getElementById("inputNomeAvaliacao").addEventListener("input", atualizarBotaoEnviar);
+
+  function atualizarBotaoEnviar(){
+    const nome = document.getElementById("inputNomeAvaliacao").value.trim();
+    document.getElementById("btnEnviarAvaliacao").disabled = !(notaSelecionada > 0 && nome);
+  }
+
+  document.getElementById("btnEnviarAvaliacao").onclick = async () => {
+    const nome = document.getElementById("inputNomeAvaliacao").value.trim();
+    const comentario = document.getElementById("inputComentario").value.trim();
+    const erroEl = document.getElementById("msgErroAvaliacao");
+    const btn = document.getElementById("btnEnviarAvaliacao");
+
+    erroEl.textContent = "";
+    btn.disabled = true;
+    btn.textContent = "Enviando...";
+
+    try {
+      const { error } = await supabaseClient.from("cardapio_avaliacoes").insert({
+        slug_loja: SLUG_LOJA,
+        nome_cliente: nome,
+        nota: notaSelecionada,
+        comentario: comentario,
+      });
+
+      if(error) throw error;
+
+      document.getElementById("telaAvaliacao").style.display = "none";
+      document.getElementById("telaSucesso").style.display = "block";
+    } catch(e){
+      erroEl.textContent = "Não foi possível enviar sua avaliação. Tente novamente.";
+      btn.disabled = false;
+      btn.textContent = "Enviar avaliação";
+    }
+  };
+}
+</script>
+
+</body>
+</html>
