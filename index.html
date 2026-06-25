@@ -692,6 +692,12 @@ body{
   font-size:15px;
 }
 .modal-total b{ font-family:var(--fonte-display); font-size:22px; color:var(--cor-dourado); }
+.modal-subtotal{
+  font-size:13px;
+  color: var(--cor-creme-fraco);
+  margin-bottom:6px;
+}
+.modal-subtotal b{ font-family: var(--fonte-corpo); font-size:13px; font-weight:700; color: var(--cor-creme); }
 .btn-finalizar{
   width:100%;
   background: var(--cor-brasa);
@@ -1156,6 +1162,7 @@ let LOJA_ABERTA_MANUAL = true;
 let TEMPO_ESTIMADO_MIN = 25; // tempo base (minutos), configurável no painel
 let TEMPO_ESTIMADO_MAX = 35;
 let DIAS_FUNCIONAMENTO = [0,1,2,3,4,5,6]; // 0=domingo, 1=segunda, ..., 6=sábado. Todos os dias por padrão.
+let BAIRROS_ENTREGA = []; // [{ id, nome, taxa }] — carregado do painel, vazio até a loja cadastrar algum
 
 let cardapio = [
   {
@@ -1246,6 +1253,7 @@ let pedido = {
   telefone: "",
   tipoEntrega: null,      // "entrega" | "retirada"
   endereco: { rua: "", numero: "", bairro: "", complemento: "" },
+  taxaEntrega: 0,         // preenchido automaticamente conforme o bairro escolhido
   formaPagamento: null,   // "pix" | "dinheiro" | "debito" | "credito" | "vale"
   trocoPara: "",
   dividirPagamento: false,
@@ -1313,13 +1321,18 @@ function buscarItem(id){
   }
 }
 
-function calcularTotal(){
+function calcularSubtotalItens(){
   let total = 0;
   for(const id in carrinho){
     const item = buscarItem(id);
     if(item) total += item.preco * carrinho[id];
   }
   return total;
+}
+
+function calcularTotal(){
+  const taxa = (pedido.tipoEntrega === "entrega") ? (pedido.taxaEntrega || 0) : 0;
+  return calcularSubtotalItens() + taxa;
 }
 
 function totalItens(){
@@ -1543,7 +1556,17 @@ function renderizarEtapaCarrinho(){
     }).join("");
   }
 
+  const temTaxa = pedido.tipoEntrega === "entrega" && (pedido.taxaEntrega || 0) > 0;
   document.getElementById("modalFooter").innerHTML = `
+    ${temTaxa ? `
+    <div class="modal-total modal-subtotal">
+      <span>Subtotal</span>
+      <b>${formatarPreco(calcularSubtotalItens())}</b>
+    </div>
+    <div class="modal-total modal-subtotal">
+      <span>Taxa de entrega (${pedido.endereco.bairro})</span>
+      <b>${formatarPreco(pedido.taxaEntrega)}</b>
+    </div>` : ""}
     <div class="modal-total">
       <span>Total</span>
       <b>${formatarPreco(calcularTotal())}</b>
@@ -1612,6 +1635,17 @@ function renderizarEtapaEntrega(){
 
   const campoEndereco = document.getElementById("campoEndereco");
   if(pedido.tipoEntrega === "entrega"){
+    const opcoesBairro = BAIRROS_ENTREGA.map(b =>
+      `<option value="${b.nome}" ${pedido.endereco.bairro === b.nome ? "selected" : ""}>${b.nome} — ${formatarPreco(b.taxa)}</option>`
+    ).join("");
+
+    const campoBairro = BAIRROS_ENTREGA.length > 0
+      ? `<select class="campo-input" id="inputBairro">
+          <option value="">Selecione seu bairro</option>
+          ${opcoesBairro}
+        </select>`
+      : `<input class="campo-input" id="inputBairro" placeholder="Bairro" value="${pedido.endereco.bairro}">`;
+
     campoEndereco.innerHTML = `
       <div class="campo-grupo">
         <label class="campo-label">Rua</label>
@@ -1624,7 +1658,7 @@ function renderizarEtapaEntrega(){
         </div>
         <div class="campo-grupo">
           <label class="campo-label">Bairro</label>
-          <input class="campo-input" id="inputBairro" placeholder="Bairro" value="${pedido.endereco.bairro}">
+          ${campoBairro}
         </div>
       </div>
       <div class="campo-grupo">
@@ -1632,12 +1666,25 @@ function renderizarEtapaEntrega(){
         <input class="campo-input" id="inputComplemento" placeholder="Apto, bloco, ponto de referência..." value="${pedido.endereco.complemento}">
       </div>`;
 
-    ["Rua","Numero","Bairro","Complemento"].forEach(campo => {
+    ["Rua","Numero","Complemento"].forEach(campo => {
       const input = document.getElementById("input" + campo);
       input.oninput = () => { pedido.endereco[campo.toLowerCase()] = input.value; atualizarBotaoEntrega(); salvarCarrinhoLocal(); };
     });
+
+    const inputBairro = document.getElementById("inputBairro");
+    const eventoBairro = BAIRROS_ENTREGA.length > 0 ? "onchange" : "oninput";
+    inputBairro[eventoBairro] = () => {
+      pedido.endereco.bairro = inputBairro.value;
+      if(BAIRROS_ENTREGA.length > 0){
+        const bairroEscolhido = BAIRROS_ENTREGA.find(b => b.nome === inputBairro.value);
+        pedido.taxaEntrega = bairroEscolhido ? bairroEscolhido.taxa : 0;
+      }
+      atualizarBotaoEntrega();
+      salvarCarrinhoLocal();
+    };
   } else {
     campoEndereco.innerHTML = "";
+    pedido.taxaEntrega = 0;
   }
 
   const footer = document.getElementById("modalFooter");
@@ -2033,6 +2080,11 @@ function montarMensagemWhatsApp(){
     msg += `• ${qtd}x ${item.nome} — ${formatarPreco(item.preco * qtd)}\n`;
     if(observacoes[id]) msg += `   ↳ _${observacoes[id]}_\n`;
   });
+  const temTaxaMsg = pedido.tipoEntrega === "entrega" && (pedido.taxaEntrega || 0) > 0;
+  if(temTaxaMsg){
+    msg += `\nSubtotal: ${formatarPreco(calcularSubtotalItens())}`;
+    msg += `\nTaxa de entrega (${pedido.endereco.bairro}): ${formatarPreco(pedido.taxaEntrega)}`;
+  }
   msg += `\n*Total: ${formatarPreco(calcularTotal())}*\n`;
 
   msg += `\n📍 *${pedido.tipoEntrega === 'entrega' ? 'Entrega' : 'Retirada no local'}*`;
@@ -2289,6 +2341,7 @@ async function registrarPedido(){
       tipo_entrega: pedido.tipoEntrega,
       forma_pagamento: pedido.dividirPagamento ? "dividido" : pedido.formaPagamento,
       total: calcularTotal(),
+      taxa_entrega: pedido.tipoEntrega === "entrega" ? (pedido.taxaEntrega || 0) : 0,
       itens: itensDoPedido.map(i => ({ nome: i.nome, quantidade: i.quantidade, preco_unitario: i.preco_unitario, observacao: i.observacao })),
       observacao: pedido.observacao || "",
       pix_confirmado: pedido.formaPagamento === "pix" ? pixPago : false,
@@ -2448,6 +2501,16 @@ async function carregarDadosDaLoja(){
       })).filter(cat => cat.itens.length > 0); // não mostra categoria vazia pro cliente
 
       if(novoCardapio.length > 0) cardapio = novoCardapio;
+    }
+
+    const { data: bairros, error: errBairros } = await supabaseClient
+      .from("cardapio_bairros")
+      .select("*")
+      .eq("slug_loja", SLUG_LOJA)
+      .order("ordem", { ascending: true });
+
+    if(!errBairros && bairros){
+      BAIRROS_ENTREGA = bairros.map(b => ({ id: b.id, nome: b.nome, taxa: parseFloat(b.taxa_entrega) || 0 }));
     }
   } catch(e){
     console.warn("Falha ao buscar dados do Supabase, usando dados fixos como fallback.", e);
