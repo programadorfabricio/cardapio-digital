@@ -1753,15 +1753,14 @@ async function buscarHistoricoPedidos(telefoneDigitado){
 
   resultadoEl.innerHTML = `<div class="mp-mensagem">Buscando seus pedidos...</div>`;
 
-  const telefoneCompleto = normalizarTelefoneComDDI(telefoneNumeros);
-
+  // cardapio_pedidos.telefone_cliente é salvo sem DDI (diferente de cardapio_clientes.telefone, que usa DDI)
   try {
     const { data, error } = await supabaseClient
       .from("cardapio_pedidos")
       .select("*")
       .eq("slug_loja", SLUG_LOJA)
-      .eq("telefone_cliente", telefoneCompleto)
-      .order("created_at", { ascending: false })
+      .eq("telefone_cliente", telefoneNumeros)
+      .order("criado_em", { ascending: false })
       .limit(10);
 
     if(error) throw error;
@@ -1772,7 +1771,7 @@ async function buscarHistoricoPedidos(telefoneDigitado){
     }
 
     resultadoEl.innerHTML = data.map((p, idx) => {
-      const data_ = new Date(p.created_at);
+      const data_ = new Date(p.criado_em);
       const dataFormatada = data_.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" });
       const itensTexto = (p.itens || []).map(i => `${i.quantidade}x ${i.nome}`).join(", ");
       return `
@@ -2538,7 +2537,7 @@ async function atualizarTempoEstimado(){
         .from("cardapio_pedidos")
         .select("id", { count: "exact", head: true })
         .eq("slug_loja", SLUG_LOJA)
-        .gte("created_at", desde)
+        .gte("criado_em", desde)
         .not("status", "in", '("entregue","cancelado")');
 
       if(!error && typeof count === "number"){
@@ -2573,7 +2572,7 @@ async function atualizarDestaqueMaisPedidos(){
       .from("cardapio_pedidos")
       .select("itens")
       .eq("slug_loja", SLUG_LOJA)
-      .gte("created_at", desde)
+      .gte("criado_em", desde)
       .neq("status", "cancelado")
       .limit(500);
 
