@@ -1041,6 +1041,7 @@ let HORARIO_FECHAMENTO = "23:59";
 let LOJA_ABERTA_MANUAL = true;
 let TEMPO_ESTIMADO_MIN = 25; // tempo base (minutos), configurável no painel
 let TEMPO_ESTIMADO_MAX = 35;
+let DIAS_FUNCIONAMENTO = [0,1,2,3,4,5,6]; // 0=domingo, 1=segunda, ..., 6=sábado. Todos os dias por padrão.
 
 let cardapio = [
   {
@@ -1985,7 +1986,7 @@ function mostrarErroPix(mensagem){
 function enviarPedidoWhatsApp(){
   if(totalItens() === 0) return;
   if(!lojaEstaAberta()){
-    alert(`Estamos fechados no momento.\nHorário de funcionamento: ${HORARIO_ABERTURA} às ${HORARIO_FECHAMENTO}.`);
+    alert(mensagemLojaFechada());
     return;
   }
   const texto = montarMensagemWhatsApp();
@@ -2143,6 +2144,9 @@ async function carregarDadosDaLoja(){
       LOJA_ABERTA_MANUAL = config.aberto_manual !== false;
       TEMPO_ESTIMADO_MIN = config.tempo_estimado_min || TEMPO_ESTIMADO_MIN;
       TEMPO_ESTIMADO_MAX = config.tempo_estimado_max || TEMPO_ESTIMADO_MAX;
+      if(Array.isArray(config.dias_funcionamento) && config.dias_funcionamento.length > 0){
+        DIAS_FUNCIONAMENTO = config.dias_funcionamento;
+      }
     }
 
     const { data: categorias, error: errCategorias } = await supabaseClient
@@ -2192,6 +2196,12 @@ function lojaEstaAberta(){
   if(!LOJA_ABERTA_MANUAL) return false;
 
   const agora = new Date();
+
+  // Verifica se a loja funciona no dia de hoje (0=domingo ... 6=sábado)
+  if(Array.isArray(DIAS_FUNCIONAMENTO) && DIAS_FUNCIONAMENTO.length > 0){
+    if(!DIAS_FUNCIONAMENTO.includes(agora.getDay())) return false;
+  }
+
   const horaAtual = agora.getHours() * 60 + agora.getMinutes();
 
   const [hA, mA] = HORARIO_ABERTURA.split(":").map(Number);
@@ -2204,6 +2214,15 @@ function lojaEstaAberta(){
     return horaAtual >= minutosAbertura || horaAtual < minutosFechamento;
   }
   return horaAtual >= minutosAbertura && horaAtual < minutosFechamento;
+}
+
+const NOMES_DIAS_SEMANA = ["domingo", "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado"];
+
+function mensagemLojaFechada(){
+  if(Array.isArray(DIAS_FUNCIONAMENTO) && DIAS_FUNCIONAMENTO.length > 0 && !DIAS_FUNCIONAMENTO.includes(new Date().getDay())){
+    return `Não abrimos hoje (${NOMES_DIAS_SEMANA[new Date().getDay()]}). Horário de funcionamento: ${HORARIO_ABERTURA} às ${HORARIO_FECHAMENTO}.`;
+  }
+  return `Estamos fechados no momento. Horário de funcionamento: ${HORARIO_ABERTURA} às ${HORARIO_FECHAMENTO}.`;
 }
 
 function aplicarEstadoAberto(){
@@ -2223,9 +2242,9 @@ function aplicarEstadoAberto(){
       avisoFechado.className = "aviso-demo";
       avisoFechado.style.background = "rgba(192,57,43,0.15)";
       avisoFechado.style.borderColor = "#c0392b";
-      avisoFechado.innerHTML = `🕒 Estamos fechados no momento. Horário de funcionamento: ${HORARIO_ABERTURA} às ${HORARIO_FECHAMENTO}.`;
       document.getElementById("categorias").insertAdjacentElement("beforebegin", avisoFechado);
     }
+    avisoFechado.innerHTML = `🕒 ${mensagemLojaFechada()}`;
     if(btnCarrinho) btnCarrinho.style.display = "none";
   }
 }

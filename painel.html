@@ -304,6 +304,34 @@ body{
 }
 .toggle-switch.on::after{ left: 18px; }
 
+.dias-semana-grid{
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.dia-pill{
+  width: 42px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--cor-fundo-alt);
+  border: 1px solid var(--cor-card-borda);
+  border-radius: 8px;
+  color: var(--cor-creme-fraco);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+.dia-pill.ativo{
+  background: var(--cor-verde);
+  border-color: var(--cor-verde);
+  color: #fff;
+}
+
 .item-acoes{ display: flex; gap: 8px; }
 .btn-salvar-item{
   background: var(--cor-verde);
@@ -739,6 +767,18 @@ body{
           <div>
             <label class="campo-label">Fecha às</label>
             <input class="campo-input" type="time" id="cfgFechamento">
+          </div>
+        </div>
+        <div style="margin-top:14px;">
+          <label class="campo-label">Dias que funciona</label>
+          <div class="dias-semana-grid" id="diasSemanaGrid">
+            <div class="dia-pill ativo" data-dia="0">Dom</div>
+            <div class="dia-pill ativo" data-dia="1">Seg</div>
+            <div class="dia-pill ativo" data-dia="2">Ter</div>
+            <div class="dia-pill ativo" data-dia="3">Qua</div>
+            <div class="dia-pill ativo" data-dia="4">Qui</div>
+            <div class="dia-pill ativo" data-dia="5">Sex</div>
+            <div class="dia-pill ativo" data-dia="6">Sáb</div>
           </div>
         </div>
         <div style="margin-top:14px;">
@@ -1248,6 +1288,14 @@ async function carregarConfig(){
     document.getElementById("cfgAbertura").value = (data.horario_abertura || "00:00").slice(0,5);
     document.getElementById("cfgFechamento").value = (data.horario_fechamento || "23:59").slice(0,5);
 
+    const diasAtivos = (Array.isArray(data.dias_funcionamento) && data.dias_funcionamento.length > 0)
+      ? data.dias_funcionamento
+      : [0,1,2,3,4,5,6];
+    document.querySelectorAll(".dia-pill").forEach(pill => {
+      const dia = parseInt(pill.dataset.dia, 10);
+      pill.classList.toggle("ativo", diasAtivos.includes(dia));
+    });
+
     const sw = document.getElementById("switchAbertoManual");
     sw.classList.toggle("on", data.aberto_manual !== false);
   } catch(e){
@@ -1258,6 +1306,10 @@ async function carregarConfig(){
 document.getElementById("toggleAbertoManual").onclick = () => {
   document.getElementById("switchAbertoManual").classList.toggle("on");
 };
+
+document.querySelectorAll(".dia-pill").forEach(pill => {
+  pill.onclick = () => pill.classList.toggle("ativo");
+});
 
 /* ============================================
    RENDERIZAÇÃO DOS ITENS
@@ -1679,6 +1731,13 @@ async function moverCategoria(index, direcao){
    SALVAR CONFIGURAÇÕES
    ============================================ */
 document.getElementById("btnSalvarConfig").onclick = async () => {
+  const diasFuncionamento = [...document.querySelectorAll(".dia-pill.ativo")].map(p => parseInt(p.dataset.dia, 10));
+
+  if(diasFuncionamento.length === 0){
+    mostrarStatus("Selecione pelo menos um dia de funcionamento.", "erro");
+    return;
+  }
+
   const payload = {
     nome_loja: document.getElementById("cfgNome").value.trim(),
     numero_whatsapp: document.getElementById("cfgWhatsapp").value.trim(),
@@ -1686,6 +1745,7 @@ document.getElementById("btnSalvarConfig").onclick = async () => {
     tempo_estimado_max: parseInt(document.getElementById("cfgTempoMax").value, 10) || null,
     horario_abertura: document.getElementById("cfgAbertura").value,
     horario_fechamento: document.getElementById("cfgFechamento").value,
+    dias_funcionamento: diasFuncionamento,
     aberto_manual: document.getElementById("switchAbertoManual").classList.contains("on")
   };
 
