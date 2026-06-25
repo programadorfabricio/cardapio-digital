@@ -106,6 +106,111 @@ body{
 }
 .hero-meta-item b{ color: var(--cor-creme); font-weight:700; }
 
+.btn-meus-pedidos{
+  margin-top: 16px;
+  background: rgba(245,235,220,0.08);
+  border: 1px solid var(--cor-card-borda);
+  color: var(--cor-creme);
+  font-family: var(--fonte-corpo);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 9px 16px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+.btn-meus-pedidos:hover{ border-color: var(--cor-brasa); }
+
+/* ===== MEUS PEDIDOS ===== */
+.mp-busca-wrap{
+  padding: 4px 0 16px;
+}
+.mp-busca-linha{
+  display:flex;
+  gap:8px;
+}
+.mp-busca-linha input{
+  flex:1;
+  padding:12px 14px;
+  background: var(--cor-card);
+  border:1px solid var(--cor-card-borda);
+  border-radius:10px;
+  color: var(--cor-creme);
+  font-family: var(--fonte-corpo);
+  font-size:14px;
+  outline:none;
+}
+.mp-busca-linha input:focus{ border-color: var(--cor-brasa); }
+.mp-busca-linha button{
+  background: var(--cor-brasa);
+  color:#fff;
+  border:none;
+  border-radius:10px;
+  padding:0 18px;
+  font-weight:700;
+  font-size:13.5px;
+  cursor:pointer;
+  flex-shrink:0;
+}
+.mp-mensagem{
+  text-align:center;
+  color: var(--cor-creme-fraco);
+  font-size:13px;
+  padding:24px 12px;
+}
+.mp-pedido-card{
+  background: var(--cor-card);
+  border:1px solid var(--cor-card-borda);
+  border-radius:14px;
+  padding:14px;
+  margin-bottom:12px;
+}
+.mp-pedido-data{
+  font-size:11.5px;
+  color: var(--cor-creme-fraco);
+  margin-bottom:8px;
+  text-transform: uppercase;
+  letter-spacing:0.03em;
+}
+.mp-pedido-itens{
+  font-size:13px;
+  color: var(--cor-creme);
+  line-height:1.6;
+  margin-bottom:10px;
+}
+.mp-pedido-rodape{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+.mp-pedido-total{
+  font-weight:700;
+  color: var(--cor-dourado);
+  font-size:14px;
+}
+.btn-repetir-pedido{
+  background: var(--cor-brasa);
+  color:#fff;
+  border:none;
+  border-radius:9px;
+  padding:8px 14px;
+  font-weight:700;
+  font-size:12.5px;
+  cursor:pointer;
+  white-space:nowrap;
+}
+.btn-repetir-pedido:hover{ background: var(--cor-brasa-clara); }
+
+.link-meus-pedidos{
+  display:inline-block;
+  margin-top:8px;
+  font-size:12.5px;
+  color: var(--cor-dourado);
+  text-decoration: underline;
+  cursor:pointer;
+}
+
 /* ===== NAV CATEGORIAS (sticky) ===== */
 .nav-cat{
   position: sticky;
@@ -975,6 +1080,7 @@ body{
     <div class="hero-meta-item">📍 <b>Retirada e entrega</b></div>
     <div class="hero-meta-item">⭐ <b>4.8</b> (320 avaliações)</div>
   </div>
+  <button class="btn-meus-pedidos" id="btnAbrirMeusPedidos">📋 Meus pedidos</button>
 </div>
 
 <div class="busca-wrap">
@@ -1011,6 +1117,14 @@ body{
   </div>
   <div class="modal-itens" id="modalConteudo"></div>
   <div class="modal-footer" id="modalFooter"></div>
+</div>
+
+<div class="modal-carrinho" id="modalMeusPedidos">
+  <div class="modal-header">
+    <h2>Meus pedidos</h2>
+    <button class="modal-fechar" id="fecharModalMeusPedidos">✕</button>
+  </div>
+  <div class="modal-itens" id="meusPedidosConteudo"></div>
 </div>
 
 <script>
@@ -1450,6 +1564,7 @@ function renderizarEtapaEntrega(){
       <label class="campo-label">Telefone (WhatsApp)</label>
       <input class="campo-input" id="inputTelefone" placeholder="(19) 98765-4321" value="${pedido.telefone || ''}" inputmode="numeric">
       <div class="cliente-status" id="clienteStatus"></div>
+      <span class="link-meus-pedidos" id="linkJaPediAntes">Já pedi antes? Ver meus pedidos</span>
     </div>
     <div class="campo-grupo">
       <label class="campo-label">Nome para o pedido</label>
@@ -1466,6 +1581,7 @@ function renderizarEtapaEntrega(){
     <div id="campoEndereco"></div>`;
 
   document.getElementById("btnVoltarCarrinho").onclick = () => irPara("carrinho");
+  document.getElementById("linkJaPediAntes").onclick = () => abrirMeusPedidos(pedido.telefone || "");
 
   const inputTelefone = document.getElementById("inputTelefone");
   let timeoutBuscaCliente = null;
@@ -1582,6 +1698,153 @@ async function buscarClientePorTelefone(telefoneNumeros){
     console.warn("Erro ao buscar cliente:", e);
   }
 }
+
+/* ============================================
+   MEUS PEDIDOS — histórico por telefone e repetir pedido
+   ============================================ */
+function abrirMeusPedidos(telefonePreenchido){
+  fecharModalCarrinho();
+
+  const overlay = document.getElementById("overlay");
+  const modal = document.getElementById("modalMeusPedidos");
+  overlay.classList.add("aberto");
+  modal.classList.add("aberto");
+
+  const cont = document.getElementById("meusPedidosConteudo");
+  const valorInicial = (telefonePreenchido || "").replace(/\D/g, "");
+
+  cont.innerHTML = `
+    <div class="mp-busca-wrap">
+      <div class="mp-busca-linha">
+        <input type="text" id="inputTelefoneMeusPedidos" placeholder="(19) 98765-4321" inputmode="numeric" value="${telefonePreenchido || ''}">
+        <button id="btnBuscarMeusPedidos">Buscar</button>
+      </div>
+    </div>
+    <div id="resultadoMeusPedidos"></div>`;
+
+  const inputTel = document.getElementById("inputTelefoneMeusPedidos");
+  const buscar = () => buscarHistoricoPedidos(inputTel.value);
+
+  document.getElementById("btnBuscarMeusPedidos").onclick = buscar;
+  inputTel.addEventListener("keydown", (e) => { if(e.key === "Enter") buscar(); });
+
+  if(valorInicial.length >= 10) buscar();
+  else inputTel.focus();
+}
+
+function fecharModalMeusPedidos(){
+  document.getElementById("overlay").classList.remove("aberto");
+  document.getElementById("modalMeusPedidos").classList.remove("aberto");
+}
+
+async function buscarHistoricoPedidos(telefoneDigitado){
+  const resultadoEl = document.getElementById("resultadoMeusPedidos");
+  const telefoneNumeros = (telefoneDigitado || "").replace(/\D/g, "");
+
+  if(telefoneNumeros.length < 10){
+    resultadoEl.innerHTML = `<div class="mp-mensagem">Digite um telefone válido com DDD.</div>`;
+    return;
+  }
+
+  if(!supabaseClient){
+    resultadoEl.innerHTML = `<div class="mp-mensagem">Não foi possível buscar agora. Tente novamente em alguns instantes.</div>`;
+    return;
+  }
+
+  resultadoEl.innerHTML = `<div class="mp-mensagem">Buscando seus pedidos...</div>`;
+
+  const telefoneCompleto = normalizarTelefoneComDDI(telefoneNumeros);
+
+  try {
+    const { data, error } = await supabaseClient
+      .from("cardapio_pedidos")
+      .select("*")
+      .eq("slug_loja", SLUG_LOJA)
+      .eq("telefone_cliente", telefoneCompleto)
+      .order("created_at", { ascending: false })
+      .limit(10);
+
+    if(error) throw error;
+
+    if(!data || data.length === 0){
+      resultadoEl.innerHTML = `<div class="mp-mensagem">Nenhum pedido encontrado com esse telefone.</div>`;
+      return;
+    }
+
+    resultadoEl.innerHTML = data.map((p, idx) => {
+      const data_ = new Date(p.created_at);
+      const dataFormatada = data_.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" });
+      const itensTexto = (p.itens || []).map(i => `${i.quantidade}x ${i.nome}`).join(", ");
+      return `
+        <div class="mp-pedido-card">
+          <div class="mp-pedido-data">${dataFormatada}</div>
+          <div class="mp-pedido-itens">${itensTexto}</div>
+          <div class="mp-pedido-rodape">
+            <span class="mp-pedido-total">${formatarPreco(parseFloat(p.total) || 0)}</span>
+            <button class="btn-repetir-pedido" data-idx="${idx}">🔁 Repetir pedido</button>
+          </div>
+        </div>`;
+    }).join("");
+
+    resultadoEl.querySelectorAll(".btn-repetir-pedido").forEach(btn => {
+      btn.onclick = () => repetirPedido(data[parseInt(btn.dataset.idx, 10)], telefoneDigitado);
+    });
+  } catch(e){
+    console.warn("Erro ao buscar histórico de pedidos:", e);
+    resultadoEl.innerHTML = `<div class="mp-mensagem">Erro ao buscar seus pedidos. Tente novamente.</div>`;
+  }
+}
+
+function repetirPedido(pedidoAntigo, telefoneDigitado){
+  const itensAntigos = pedidoAntigo.itens || [];
+  if(itensAntigos.length === 0) return;
+
+  // Tenta casar cada item antigo com um item do cardápio atual pelo nome
+  // (o id pode ter mudado se o item foi recriado no painel)
+  let algumDisponivel = false;
+  let algumIndisponivel = false;
+
+  itensAntigos.forEach(itemAntigo => {
+    const itemAtual = encontrarItemPorNome(itemAntigo.nome);
+    if(itemAtual && itemAtual.disponivel !== false){
+      carrinho[itemAtual.id] = (carrinho[itemAtual.id] || 0) + (itemAntigo.quantidade || 1);
+      if(itemAntigo.observacao) observacoes[itemAtual.id] = itemAntigo.observacao;
+      algumDisponivel = true;
+    } else {
+      algumIndisponivel = true;
+    }
+  });
+
+  salvarCarrinhoLocal();
+  Object.keys(carrinho).forEach(id => renderizarControle(id));
+  atualizarCarrinhoFlutuante();
+  fecharModalMeusPedidos();
+
+  if(!algumDisponivel){
+    alert("Nenhum item desse pedido está disponível no cardápio atual.");
+    return;
+  }
+
+  if(telefoneDigitado) pedido.telefone = telefoneDigitado;
+
+  irPara("carrinho");
+  document.getElementById("overlay").classList.add("aberto");
+  document.getElementById("modalCarrinho").classList.add("aberto");
+
+  if(algumIndisponivel){
+    setTimeout(() => alert("Alguns itens desse pedido não estão mais disponíveis e não foram adicionados. Os demais já estão no seu carrinho."), 300);
+  }
+}
+
+function encontrarItemPorNome(nome){
+  for(const cat of cardapio){
+    const item = cat.itens.find(i => i.nome === nome);
+    if(item) return item;
+  }
+}
+
+document.getElementById("fecharModalMeusPedidos").onclick = fecharModalMeusPedidos;
+document.getElementById("btnAbrirMeusPedidos").onclick = () => abrirMeusPedidos(pedido.telefone || "");
 
 function atualizarBotaoEntrega(){
   const btn = document.getElementById("btnIrPagamento");
@@ -2105,7 +2368,10 @@ function fecharModalCarrinho(){
 }
 
 document.getElementById("fecharModal").onclick = fecharModalCarrinho;
-document.getElementById("overlay").onclick = fecharModalCarrinho;
+document.getElementById("overlay").onclick = () => {
+  if(document.getElementById("modalMeusPedidos").classList.contains("aberto")) fecharModalMeusPedidos();
+  else fecharModalCarrinho();
+};
 
 document.getElementById("inputBusca").addEventListener("input", aplicarFiltroBusca);
 document.getElementById("btnLimparBusca").onclick = () => {
