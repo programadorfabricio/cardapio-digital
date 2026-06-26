@@ -1679,8 +1679,8 @@ async function salvarItem(card, id){
     await salvarIngredientesDoItem(card, id);
 
     mostrarStatus(`"${payload.nome}" foi salvo com sucesso.`, "sucesso");
+    await carregarIngredientes(); // atualiza o cache de vínculos ANTES de re-renderizar os itens
     await carregarItens();
-    await carregarIngredientes(); // atualiza a contagem de "itens vinculados" na aba Ingredientes
   } catch(e){
     mostrarStatus("Erro ao salvar: " + e.message, "erro");
   }
