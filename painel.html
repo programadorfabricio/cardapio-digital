@@ -304,6 +304,39 @@ body{
 }
 .toggle-switch.on::after{ left: 18px; }
 
+.lista-ingredientes-item{
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+.ingrediente-item-linha{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.ingrediente-checkbox{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--cor-creme-fraco);
+  cursor: pointer;
+  flex: 1;
+}
+.ingrediente-checkbox input[type="checkbox"]{
+  width: 16px;
+  height: 16px;
+  accent-color: var(--cor-verde);
+  cursor: pointer;
+}
+.campo-qtd-ingrediente{
+  width: 70px !important;
+  flex-shrink: 0;
+  padding: 6px 8px !important;
+  font-size: 13px !important;
+}
+
 .dias-semana-grid{
   display: flex;
   gap: 6px;
@@ -698,6 +731,7 @@ body{
       <button class="aba-btn" data-aba="itens">Cardápio</button>
       <button class="aba-btn" data-aba="categorias">Categorias</button>
       <button class="aba-btn" data-aba="bairros">Bairros</button>
+      <button class="aba-btn" data-aba="ingredientes">Ingredientes</button>
       <button class="aba-btn" data-aba="clientes">Clientes</button>
       <button class="aba-btn" data-aba="config">Configurações</button>
     </div>
@@ -733,6 +767,13 @@ body{
       <div class="loading" id="loadingBairros">Carregando bairros...</div>
       <div id="listaBairrosGerenciar"></div>
       <button class="btn-add-item" id="btnAddBairro">+ Adicionar bairro</button>
+    </div>
+
+    <div class="aba-conteudo" id="abaIngredientes">
+      <p class="dica-texto">Cadastre ingredientes compartilhados (ex: Pão, Bacon, Carne) com a quantidade em estoque. Depois, vincule cada item do cardápio aos ingredientes que ele usa (aba Cardápio). Quando um ingrediente acabar, todos os itens que dependem dele ficam esgotados automaticamente.</p>
+      <div class="loading" id="loadingIngredientes">Carregando ingredientes...</div>
+      <div id="listaIngredientesGerenciar"></div>
+      <button class="btn-add-item" id="btnAddIngrediente">+ Adicionar ingrediente</button>
     </div>
 
     <div class="aba-conteudo" id="abaClientes">
@@ -821,6 +862,8 @@ const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let itensCache = [];
 let categoriasCache = [];
 let bairrosCache = [];
+let ingredientesCache = [];
+let itemIngredientesCache = []; // vínculos item <-> ingrediente (todos da loja)
 let clientesCache = [];
 let configCache = null;
 
@@ -908,7 +951,7 @@ function mostrarStatus(msg, tipo){
    CARREGAMENTO
    ============================================ */
 async function carregarTudo(){
-  await Promise.all([carregarCategorias(), carregarConfig(), carregarClientes(), carregarVendas(), carregarAvaliacoes(), carregarBairros()]);
+  await Promise.all([carregarCategorias(), carregarConfig(), carregarClientes(), carregarVendas(), carregarAvaliacoes(), carregarBairros(), carregarIngredientes()]);
   await carregarItens();
   renderizarCategorias(); // re-renderiza pra atualizar a contagem de itens por categoria
   iniciarChecagemPedidosNovos();
@@ -1284,6 +1327,38 @@ async function carregarBairros(){
   document.getElementById("loadingBairros").style.display = "none";
 }
 
+async function carregarIngredientes(){
+  document.getElementById("loadingIngredientes").style.display = "block";
+  try {
+    const { data, error } = await supabaseClient
+      .from("cardapio_ingredientes")
+      .select("*")
+      .eq("slug_loja", SLUG_LOJA)
+      .order("nome", { ascending: true });
+
+    if(error) throw error;
+    ingredientesCache = data || [];
+
+    // Busca os vínculos item <-> ingrediente só dos ingredientes dessa loja
+    const idsIngredientes = ingredientesCache.map(i => i.id);
+    if(idsIngredientes.length > 0){
+      const { data: vinculos, error: errVinculos } = await supabaseClient
+        .from("cardapio_item_ingredientes")
+        .select("*")
+        .in("ingrediente_id", idsIngredientes);
+      if(errVinculos) throw errVinculos;
+      itemIngredientesCache = vinculos || [];
+    } else {
+      itemIngredientesCache = [];
+    }
+
+    renderizarIngredientes();
+  } catch(e){
+    mostrarStatus("Erro ao carregar ingredientes: " + e.message, "erro");
+  }
+  document.getElementById("loadingIngredientes").style.display = "none";
+}
+
 async function carregarItens(){
   document.getElementById("loadingItens").style.display = "block";
   try {
@@ -1440,6 +1515,23 @@ function criarCardItem(item){
         <input class="campo-input campo-estoque" type="number" min="0" step="1" value="${item.estoque || 0}">
       </div>
     </div>
+    <div class="campo-grupo campo-ingredientes-wrap" style="display:${ingredientesCache.length > 0 ? 'block' : 'none'};">
+      <label class="campo-label">Ingredientes usados (estoque compartilhado)</label>
+      <div class="lista-ingredientes-item">
+        ${ingredientesCache.map(ing => {
+          const vinculo = itemIngredientesCache.find(v => v.item_id === item.id && v.ingrediente_id === ing.id);
+          return `
+          <div class="ingrediente-item-linha">
+            <label class="ingrediente-checkbox">
+              <input type="checkbox" data-ingrediente-id="${ing.id}" ${vinculo ? "checked" : ""}>
+              <span>${ing.nome}</span>
+            </label>
+            <input type="number" min="1" step="1" class="campo-input campo-qtd-ingrediente" data-ingrediente-id="${ing.id}"
+              value="${vinculo ? vinculo.quantidade_usada : 1}" style="display:${vinculo ? 'inline-block' : 'none'};">
+          </div>`;
+        }).join("")}
+      </div>
+    </div>
     <div class="campo-grupo">
       <label class="campo-label">Foto do item</label>
       <div class="foto-area">
@@ -1479,6 +1571,14 @@ function criarCardItem(item){
     card.querySelector(".campo-toggle-manual").style.display = ativo ? "none" : "flex";
     card.querySelector(".campo-estoque-aviso").style.display = ativo ? "inline" : "none";
   };
+
+  card.querySelectorAll(".ingrediente-checkbox input[type=checkbox]").forEach(checkbox => {
+    checkbox.onchange = () => {
+      const idIng = checkbox.dataset.ingredienteId;
+      const campoQtd = card.querySelector(`.campo-qtd-ingrediente[data-ingrediente-id="${idIng}"]`);
+      campoQtd.style.display = checkbox.checked ? "inline-block" : "none";
+    };
+  });
 
   const inputArquivo = card.querySelector(".campo-input-arquivo");
   card.querySelector('[data-acao="upload-foto"]').onclick = () => inputArquivo.click();
@@ -1575,10 +1675,42 @@ async function salvarItem(card, id){
       .eq("id", id);
 
     if(error) throw error;
+
+    await salvarIngredientesDoItem(card, id);
+
     mostrarStatus(`"${payload.nome}" foi salvo com sucesso.`, "sucesso");
     await carregarItens();
+    await carregarIngredientes(); // atualiza a contagem de "itens vinculados" na aba Ingredientes
   } catch(e){
     mostrarStatus("Erro ao salvar: " + e.message, "erro");
+  }
+}
+
+async function salvarIngredientesDoItem(card, itemId){
+  const checkboxes = card.querySelectorAll(".ingrediente-checkbox input[type=checkbox]");
+  if(checkboxes.length === 0) return; // loja sem ingredientes cadastrados ainda
+
+  const novosVinculos = [];
+  checkboxes.forEach(checkbox => {
+    if(!checkbox.checked) return;
+    const idIng = checkbox.dataset.ingredienteId;
+    const campoQtd = card.querySelector(`.campo-qtd-ingrediente[data-ingrediente-id="${idIng}"]`);
+    const quantidade = parseInt(campoQtd.value, 10) || 1;
+    novosVinculos.push({ item_id: itemId, ingrediente_id: idIng, quantidade_usada: quantidade });
+  });
+
+  // Remove todos os vínculos atuais desse item e recria do zero com o que está marcado agora
+  const { error: erroDelete } = await supabaseClient
+    .from("cardapio_item_ingredientes")
+    .delete()
+    .eq("item_id", itemId);
+  if(erroDelete) throw erroDelete;
+
+  if(novosVinculos.length > 0){
+    const { error: erroInsert } = await supabaseClient
+      .from("cardapio_item_ingredientes")
+      .insert(novosVinculos);
+    if(erroInsert) throw erroInsert;
   }
 }
 
@@ -1886,6 +2018,110 @@ async function moverBairro(index, direcao){
     await carregarBairros();
   } catch(e){
     mostrarStatus("Erro ao reordenar bairros: " + e.message, "erro");
+  }
+}
+
+/* ============================================
+   GERENCIAMENTO DE INGREDIENTES (estoque compartilhado)
+   ============================================ */
+function renderizarIngredientes(){
+  const container = document.getElementById("listaIngredientesGerenciar");
+  container.innerHTML = "";
+
+  if(ingredientesCache.length === 0){
+    container.innerHTML = `<p style="color:var(--cor-creme-fraco); font-size:13px; text-align:center; padding:20px 0;">Nenhum ingrediente cadastrado ainda. Adicione o primeiro abaixo.</p>`;
+    return;
+  }
+
+  ingredientesCache.forEach((ing) => {
+    const qtdItensVinculados = itemIngredientesCache.filter(v => v.ingrediente_id === ing.id).length;
+
+    const linha = document.createElement("div");
+    linha.className = "categoria-item bairro-item";
+    linha.innerHTML = `
+      <input type="text" value="${ing.nome}" data-campo="nome" placeholder="Nome do ingrediente">
+      <input type="number" min="0" class="bairro-input-preco" value="${ing.estoque}" data-campo="estoque" placeholder="0">
+      <div class="categoria-acoes">
+        <span style="font-size:11px; color:var(--cor-creme-fraco); white-space:nowrap;">${qtdItensVinculados} ${qtdItensVinculados === 1 ? 'item' : 'itens'}</span>
+        <button class="btn-icone btn-icone-salvar" data-acao="salvar" title="Salvar">✓</button>
+        <button class="btn-icone remover" data-acao="remover" title="Remover ingrediente">✕</button>
+      </div>
+    `;
+
+    linha.querySelector('[data-acao="salvar"]').onclick = () => {
+      const nome = linha.querySelector('[data-campo="nome"]').value;
+      const estoque = linha.querySelector('[data-campo="estoque"]').value;
+      salvarIngrediente(ing.id, nome, estoque);
+    };
+    linha.querySelector('[data-acao="remover"]').onclick = () => removerIngrediente(ing.id, ing.nome, qtdItensVinculados);
+
+    container.appendChild(linha);
+  });
+}
+
+document.getElementById("btnAddIngrediente").onclick = async () => {
+  try {
+    const { error } = await supabaseClient
+      .from("cardapio_ingredientes")
+      .insert({
+        slug_loja: SLUG_LOJA,
+        nome: "Novo ingrediente",
+        estoque: 0
+      });
+
+    if(error) throw error;
+    mostrarStatus("Ingrediente criado. Edite o nome e o estoque abaixo.", "sucesso");
+    await carregarIngredientes();
+  } catch(e){
+    mostrarStatus("Erro ao criar ingrediente: " + e.message, "erro");
+  }
+};
+
+async function salvarIngrediente(id, nome, estoque){
+  nome = nome.trim();
+  const estoqueNumero = parseInt(estoque, 10);
+
+  if(!nome){
+    mostrarStatus("O nome do ingrediente não pode ficar vazio.", "erro");
+    return;
+  }
+  if(isNaN(estoqueNumero) || estoqueNumero < 0){
+    mostrarStatus("Informe uma quantidade de estoque válida (0 ou maior).", "erro");
+    return;
+  }
+
+  try {
+    const { error } = await supabaseClient
+      .from("cardapio_ingredientes")
+      .update({ nome, estoque: estoqueNumero })
+      .eq("id", id);
+
+    if(error) throw error;
+    mostrarStatus("Ingrediente salvo.", "sucesso");
+    await carregarIngredientes();
+  } catch(e){
+    mostrarStatus("Erro ao salvar ingrediente: " + e.message, "erro");
+  }
+}
+
+async function removerIngrediente(id, nome, qtdItensVinculados){
+  const aviso = qtdItensVinculados > 0
+    ? `Remover "${nome}"? Isso também desvincula esse ingrediente de ${qtdItensVinculados} ${qtdItensVinculados === 1 ? 'item' : 'itens'} que o usam. Essa ação não pode ser desfeita.`
+    : `Remover o ingrediente "${nome}"? Essa ação não pode ser desfeita.`;
+
+  if(!confirm(aviso)) return;
+
+  try {
+    const { error } = await supabaseClient
+      .from("cardapio_ingredientes")
+      .delete()
+      .eq("id", id);
+
+    if(error) throw error;
+    mostrarStatus("Ingrediente removido.", "sucesso");
+    await carregarIngredientes();
+  } catch(e){
+    mostrarStatus("Erro ao remover ingrediente: " + e.message, "erro");
   }
 }
 

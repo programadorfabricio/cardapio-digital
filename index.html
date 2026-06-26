@@ -2612,6 +2612,23 @@ async function registrarPedido(){
       }
     }
 
+    // Decrementa o estoque dos ingredientes compartilhados usados por cada item
+    // (ex: 2 Duplo Bacon consome 2 pães e 4 porções de bacon)
+    for(const itemPedido of itensDoPedido){
+      const itemCompleto = buscarItem(itemPedido.id);
+      const ingredientesUsados = (itemCompleto && itemCompleto.ingredientes_usados) || [];
+      for(const ing of ingredientesUsados){
+        try {
+          await supabaseClient.rpc("decrementar_ingrediente", {
+            ingrediente_id_param: ing.ingrediente_id,
+            quantidade_param: ing.quantidade_usada * itemPedido.quantidade
+          });
+        } catch(eIngrediente){
+          console.warn("Não foi possível decrementar ingrediente para", itemPedido.nome, eIngrediente);
+        }
+      }
+    }
+
     return data?.id || null;
   } catch(e){
     console.warn("Não foi possível registrar o pedido para relatório:", e);
@@ -2737,21 +2754,65 @@ async function carregarDadosDaLoja(){
 
     if(errItens) throw errItens;
 
+    // Busca ingredientes e os vínculos item <-> ingrediente, pra calcular
+    // se algum item ficou esgotado por falta de ingrediente compartilhado
+    // (ex: acabou o pão -> todos os burgers ficam indisponíveis)
+    const { data: ingredientesData } = await supabaseClient
+      .from("cardapio_ingredientes")
+      .select("*")
+      .eq("slug_loja", SLUG_LOJA);
+
+    const idsItensDaLoja = (itens || []).map(i => i.id);
+    let vinculosData = [];
+    if(idsItensDaLoja.length > 0){
+      const { data: vinculos } = await supabaseClient
+        .from("cardapio_item_ingredientes")
+        .select("*")
+        .in("item_id", idsItensDaLoja);
+      vinculosData = vinculos || [];
+    }
+
+    const ingredientesPorId = {};
+    (ingredientesData || []).forEach(ing => { ingredientesPorId[ing.id] = ing; });
+
+    // Agrupa os vínculos por item, pra consulta rápida e pra guardar no objeto do item
+    const vinculosPorItem = {};
+    vinculosData.forEach(v => {
+      if(!vinculosPorItem[v.item_id]) vinculosPorItem[v.item_id] = [];
+      vinculosPorItem[v.item_id].push(v);
+    });
+
     if(categorias && categorias.length > 0 && itens){
       const novoCardapio = categorias.map(cat => ({
         categoria: cat.nome,
         itens: itens
           .filter(item => item.categoria_id === cat.id)
-          .map(item => ({
-            id: item.id,
-            nome: item.nome,
-            descricao: item.descricao,
-            preco: parseFloat(item.preco),
-            imagem_url: item.imagem_url,
-            disponivel: item.disponivel !== false,
-            controla_estoque: item.controla_estoque === true,
-            estoque: item.estoque || 0
-          }))
+          .map(item => {
+            const vinculosDoItem = vinculosPorItem[item.id] || [];
+            const ingredientesUsados = vinculosDoItem.map(v => ({
+              ingrediente_id: v.ingrediente_id,
+              quantidade_usada: v.quantidade_usada
+            }));
+
+            // Falta algum ingrediente vinculado? Se sim, o item fica indisponível
+            // independente do estoque próprio dele.
+            const faltaIngrediente = vinculosDoItem.some(v => {
+              const ing = ingredientesPorId[v.ingrediente_id];
+              return !ing || ing.estoque < v.quantidade_usada;
+            });
+
+            return {
+              id: item.id,
+              nome: item.nome,
+              descricao: item.descricao,
+              preco: parseFloat(item.preco),
+              imagem_url: item.imagem_url,
+              disponivel: item.disponivel !== false && !faltaIngrediente,
+              controla_estoque: item.controla_estoque === true,
+              estoque: item.estoque || 0,
+              ingredientes_usados: ingredientesUsados
+            };
+          })
       })).filter(cat => cat.itens.length > 0); // não mostra categoria vazia pro cliente
 
       if(novoCardapio.length > 0) cardapio = novoCardapio;
