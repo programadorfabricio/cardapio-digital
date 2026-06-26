@@ -1137,6 +1137,11 @@ body{
   </div>
 </section>
 
+<section class="secao-destaque" id="secaoParaVoce" style="display:none;">
+  <div class="categoria-titulo">✨ Baseado nos seus pedidos</div>
+  <div class="destaque-scroll" id="paraVoceScroll"></div>
+</section>
+
 <nav class="nav-cat" id="navCat"></nav>
 
 <main id="categorias"></main>
@@ -1434,6 +1439,31 @@ let cardapio = [
    LÓGICA DO CARDÁPIO (não precisa editar)
    ============================================ */
 const CHAVE_STORAGE = "fhcardapio_carrinho_" + (typeof SLUG_LOJA !== "undefined" ? SLUG_LOJA : "padrao");
+const CHAVE_TELEFONE_LEMBRADO = "fhcardapio_telefone_" + (typeof SLUG_LOJA !== "undefined" ? SLUG_LOJA : "padrao");
+const DIAS_LEMBRAR_TELEFONE = 90;
+
+function lembrarTelefone(telefoneDigitado){
+  const numeros = (telefoneDigitado || "").replace(/\D/g, "");
+  if(numeros.length < 10) return; // não salva telefone incompleto/inválido
+  try {
+    localStorage.setItem(CHAVE_TELEFONE_LEMBRADO, JSON.stringify({ telefone: numeros, salvoEm: Date.now() }));
+  } catch(e){
+    console.warn("Não foi possível lembrar o telefone localmente.", e);
+  }
+}
+
+function obterTelefoneLembrado(){
+  try {
+    const bruto = localStorage.getItem(CHAVE_TELEFONE_LEMBRADO);
+    if(!bruto) return null;
+    const salvo = JSON.parse(bruto);
+    const limiteMs = DIAS_LEMBRAR_TELEFONE * 24 * 60 * 60 * 1000;
+    if(!salvo || !salvo.telefone || (Date.now() - (salvo.salvoEm || 0)) > limiteMs) return null;
+    return salvo.telefone;
+  } catch(e){
+    return null;
+  }
+}
 
 let carrinho = {}; // { id: quantidade }
 let observacoes = {}; // { id: "texto da observação do item" }
@@ -1617,6 +1647,10 @@ function aplicarFiltroBusca(){
   const destaque = document.getElementById("secaoDestaque");
   if(destaque && destaque.dataset.temConteudo === "true"){
     destaque.style.display = termo ? "none" : "block";
+  }
+  const paraVoce = document.getElementById("secaoParaVoce");
+  if(paraVoce && paraVoce.dataset.temConteudo === "true"){
+    paraVoce.style.display = termo ? "none" : "block";
   }
 
   const buscaVazio = document.getElementById("buscaVazio");
@@ -1809,6 +1843,7 @@ function renderizarEtapaEntrega(){
     const telefoneNumeros = inputTelefone.value.replace(/\D/g, "");
     if(telefoneNumeros.length >= 10){
       timeoutBuscaCliente = setTimeout(() => buscarClientePorTelefone(telefoneNumeros), 500);
+      lembrarTelefone(telefoneNumeros);
     } else {
       document.getElementById("clienteStatus").textContent = "";
     }
@@ -1984,6 +2019,8 @@ async function buscarHistoricoPedidos(telefoneDigitado){
     resultadoEl.innerHTML = `<div class="mp-mensagem">Digite um telefone válido com DDD.</div>`;
     return;
   }
+
+  lembrarTelefone(telefoneNumeros);
 
   if(!supabaseClient){
     resultadoEl.innerHTML = `<div class="mp-mensagem">Não foi possível buscar agora. Tente novamente em alguns instantes.</div>`;
@@ -2913,6 +2950,78 @@ function encontrarIndiceCategoria(itemId){
   return 0;
 }
 
+/* ============================================
+   PARA VOCÊ — sugestão personalizada por telefone
+   Mesma lógica de "mais pedidos", mas filtrada só pelos pedidos
+   desse telefone específico (lembrado no navegador por até 90 dias).
+   Só aparece se o sistema já "conhece" esse cliente.
+   ============================================ */
+const PARA_VOCE_JANELA_DIAS = 90;
+const PARA_VOCE_QTD_ITENS = 4;
+
+async function atualizarSecaoParaVoce(){
+  const secao = document.getElementById("secaoParaVoce");
+  const scroll = document.getElementById("paraVoceScroll");
+  if(!secao || !scroll || !supabaseClient) return;
+
+  const telefone = obterTelefoneLembrado();
+  if(!telefone){ secao.style.display = "none"; secao.dataset.temConteudo = "false"; return; }
+
+  try {
+    const desde = new Date(Date.now() - PARA_VOCE_JANELA_DIAS * 24 * 60 * 60 * 1000).toISOString();
+    const { data: pedidos, error } = await supabaseClient
+      .from("cardapio_pedidos")
+      .select("itens")
+      .eq("slug_loja", SLUG_LOJA)
+      .eq("telefone_cliente", telefone)
+      .gte("criado_em", desde)
+      .neq("status", "cancelado")
+      .limit(100);
+
+    if(error) throw error;
+    if(!pedidos || pedidos.length === 0){ secao.style.display = "none"; secao.dataset.temConteudo = "false"; return; }
+
+    const vendasPorNome = {};
+    pedidos.forEach(p => {
+      (p.itens || []).forEach(i => {
+        if(!i || !i.nome) return;
+        vendasPorNome[i.nome] = (vendasPorNome[i.nome] || 0) + (i.quantidade || 0);
+      });
+    });
+
+    const itensDisponiveisAgora = [];
+    cardapio.forEach(cat => {
+      cat.itens.forEach(item => {
+        if(item.disponivel !== false) itensDisponiveisAgora.push(item);
+      });
+    });
+
+    const ranking = itensDisponiveisAgora
+      .map(item => ({ item, vendas: vendasPorNome[item.nome] || 0 }))
+      .filter(r => r.vendas > 0)
+      .sort((a, b) => b.vendas - a.vendas)
+      .slice(0, PARA_VOCE_QTD_ITENS);
+
+    if(ranking.length === 0){ secao.style.display = "none"; secao.dataset.temConteudo = "false"; return; }
+
+    scroll.innerHTML = ranking.map(({item}) => `
+      <div class="destaque-card" onclick="document.getElementById('cat-' + ${Math.max(0, encontrarIndiceCategoria(item.id))}).scrollIntoView({behavior:'smooth', block:'start'})">
+        <div class="destaque-card-img-wrap">
+          <img class="destaque-card-img" src="${item.imagem_url}" alt="${item.nome}" loading="lazy" onload="this.classList.add('carregada')" onerror="this.style.display='none'">
+        </div>
+        <div class="destaque-card-nome">${item.nome}</div>
+        <div class="destaque-card-preco">${formatarPreco(item.preco)}</div>
+      </div>`).join("");
+
+    secao.style.display = "block";
+    secao.dataset.temConteudo = "true";
+  } catch(e){
+    console.warn("Não foi possível calcular sugestões personalizadas:", e);
+    secao.style.display = "none";
+    secao.dataset.temConteudo = "false";
+  }
+}
+
 let lojaInvalida = false;
 
 function mostrarErroLojaNaoEncontrada(slug){
@@ -2945,6 +3054,7 @@ async function iniciar(){
   aplicarEstadoAberto();
   atualizarTempoEstimado();
   atualizarDestaqueMaisPedidos();
+  atualizarSecaoParaVoce();
 
   iniciarAtualizacaoSilenciosa();
 }
