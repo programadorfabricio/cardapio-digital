@@ -403,6 +403,26 @@ body{
   color: var(--cor-dourado);
 }
 
+.destaque-card-skeleton .destaque-card-img-wrap{
+  margin-bottom: 8px;
+}
+.destaque-card-skeleton::after{
+  content: "";
+  display: block;
+  height: 12px;
+  border-radius: 4px;
+  background: var(--cor-fundo-alt);
+  margin-bottom: 6px;
+}
+.destaque-card-skeleton::before{
+  content: "";
+  display: block;
+  height: 12px;
+  width: 60%;
+  border-radius: 4px;
+  background: var(--cor-fundo-alt);
+}
+
 .produto{
   display:flex;
   gap:14px;
@@ -1107,9 +1127,14 @@ body{
   <button class="busca-limpar" id="btnLimparBusca" style="display:none;">✕</button>
 </div>
 
-<section class="secao-destaque" id="secaoDestaque" style="display:none;">
+<section class="secao-destaque" id="secaoDestaque">
   <div class="categoria-titulo">🔥 Mais pedidos</div>
-  <div class="destaque-scroll" id="destaqueScroll"></div>
+  <div class="destaque-scroll" id="destaqueScroll">
+    <div class="destaque-card destaque-card-skeleton"><div class="destaque-card-img-wrap carregando"></div></div>
+    <div class="destaque-card destaque-card-skeleton"><div class="destaque-card-img-wrap carregando"></div></div>
+    <div class="destaque-card destaque-card-skeleton"><div class="destaque-card-img-wrap carregando"></div></div>
+    <div class="destaque-card destaque-card-skeleton"><div class="destaque-card-img-wrap carregando"></div></div>
+  </div>
 </section>
 
 <nav class="nav-cat" id="navCat"></nav>
