@@ -1442,6 +1442,23 @@ const CHAVE_STORAGE = "fhcardapio_carrinho_" + (typeof SLUG_LOJA !== "undefined"
 const CHAVE_TELEFONE_LEMBRADO = "fhcardapio_telefone_" + (typeof SLUG_LOJA !== "undefined" ? SLUG_LOJA : "padrao");
 const DIAS_LEMBRAR_TELEFONE = 90;
 
+function mascaraTelefone(valor){
+  const numeros = valor.replace(/\D/g, "").slice(0, 11);
+  if(numeros.length <= 2) return numeros;
+  if(numeros.length <= 7) return `(${numeros.slice(0,2)}) ${numeros.slice(2)}`;
+  return `(${numeros.slice(0,2)}) ${numeros.slice(2,7)}-${numeros.slice(7)}`;
+}
+
+function aplicarMascaraTelefoneEmInput(input){
+  input.addEventListener("input", () => {
+    const posCursorAntes = input.selectionStart;
+    const tamanhoAntes = input.value.length;
+    input.value = mascaraTelefone(input.value);
+    const diff = input.value.length - tamanhoAntes;
+    input.setSelectionRange(posCursorAntes + diff, posCursorAntes + diff);
+  });
+}
+
 function lembrarTelefone(telefoneDigitado){
   const numeros = (telefoneDigitado || "").replace(/\D/g, "");
   if(numeros.length < 10) return; // não salva telefone incompleto/inválido
@@ -1811,7 +1828,7 @@ function renderizarEtapaEntrega(){
     <button class="btn-voltar" id="btnVoltarCarrinho">← Voltar ao pedido</button>
     <div class="campo-grupo">
       <label class="campo-label">Telefone (WhatsApp)</label>
-      <input class="campo-input" id="inputTelefone" placeholder="(19) 98765-4321" value="${pedido.telefone || ''}" inputmode="numeric">
+      <input class="campo-input" id="inputTelefone" placeholder="(19) 98765-4321" value="${pedido.telefone || ''}" inputmode="tel">
       <div class="cliente-status" id="clienteStatus"></div>
       <span class="link-meus-pedidos" id="linkJaPediAntes">Já pedi antes? Ver meus pedidos</span>
     </div>
@@ -1834,7 +1851,14 @@ function renderizarEtapaEntrega(){
 
   const inputTelefone = document.getElementById("inputTelefone");
   let timeoutBuscaCliente = null;
+  inputTelefone.setAttribute("maxlength", "16");
   inputTelefone.oninput = () => {
+    const posCursorAntes = inputTelefone.selectionStart;
+    const tamanhoAntes = inputTelefone.value.length;
+    inputTelefone.value = mascaraTelefone(inputTelefone.value);
+    const diff = inputTelefone.value.length - tamanhoAntes;
+    inputTelefone.setSelectionRange(posCursorAntes + diff, posCursorAntes + diff);
+
     pedido.telefone = inputTelefone.value;
     atualizarBotaoEntrega();
     salvarCarrinhoLocal();
@@ -1990,13 +2014,14 @@ function abrirMeusPedidos(telefonePreenchido){
   cont.innerHTML = `
     <div class="mp-busca-wrap">
       <div class="mp-busca-linha">
-        <input type="text" id="inputTelefoneMeusPedidos" placeholder="(19) 98765-4321" inputmode="numeric" value="${telefonePreenchido || ''}">
+        <input type="text" id="inputTelefoneMeusPedidos" placeholder="(19) 98765-4321" inputmode="tel" maxlength="16" value="${telefonePreenchido || ''}">
         <button id="btnBuscarMeusPedidos">Buscar</button>
       </div>
     </div>
     <div id="resultadoMeusPedidos"></div>`;
 
   const inputTel = document.getElementById("inputTelefoneMeusPedidos");
+  aplicarMascaraTelefoneEmInput(inputTel);
   const buscar = () => buscarHistoricoPedidos(inputTel.value);
 
   document.getElementById("btnBuscarMeusPedidos").onclick = buscar;
