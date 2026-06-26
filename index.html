@@ -121,6 +121,18 @@ body{
 }
 .btn-meus-pedidos:hover{ border-color: var(--cor-brasa); }
 
+.badge-horario-pico{
+  margin-top: 12px;
+  background: rgba(192,57,43,0.15);
+  border: 1px solid #c0392b;
+  color: var(--cor-creme);
+  font-size: 12.5px;
+  line-height: 1.5;
+  padding: 10px 14px;
+  border-radius: 10px;
+}
+.badge-horario-pico b{ color: #ff8a75; }
+
 /* ===== MEUS PEDIDOS ===== */
 .mp-busca-wrap{
   padding: 4px 0 16px;
@@ -2586,12 +2598,14 @@ function aplicarEstadoAberto(){
 const TEMPO_JANELA_PEDIDOS_MIN = 90; // só considera pedidos feitos nos últimos X minutos
 const TEMPO_PEDIDOS_POR_INCREMENTO = 4; // a cada X pedidos abertos...
 const TEMPO_INCREMENTO_MINUTOS = 10;     // ...soma Y minutos no tempo base
+const PICO_MINIMO_PEDIDOS_ABERTOS = 8;   // a partir de quantos pedidos abertos é considerado "horário de pico"
 
 async function atualizarTempoEstimado(){
   const elTempo = document.getElementById("heroTempoEstimado");
   if(!elTempo) return;
 
   let extra = 0;
+  let pedidosAbertos = 0;
 
   if(supabaseClient){
     try {
@@ -2604,6 +2618,7 @@ async function atualizarTempoEstimado(){
         .not("status", "in", '("entregue","cancelado")');
 
       if(!error && typeof count === "number"){
+        pedidosAbertos = count;
         extra = Math.floor(count / TEMPO_PEDIDOS_POR_INCREMENTO) * TEMPO_INCREMENTO_MINUTOS;
       }
     } catch(e){
@@ -2611,9 +2626,34 @@ async function atualizarTempoEstimado(){
     }
   }
 
+  atualizarAvisoHorarioPico(pedidosAbertos);
+
   const min = TEMPO_ESTIMADO_MIN + extra;
   const max = TEMPO_ESTIMADO_MAX + extra;
   elTempo.textContent = `${min}-${max} min`;
+}
+
+function atualizarAvisoHorarioPico(pedidosAbertos){
+  const heroEl = document.querySelector(".hero");
+  if(!heroEl) return;
+
+  const emPico = pedidosAbertos >= PICO_MINIMO_PEDIDOS_ABERTOS;
+  let avisoPico = document.getElementById("avisoHorarioPico");
+
+  if(!emPico){
+    if(avisoPico) avisoPico.remove();
+    return;
+  }
+
+  if(!avisoPico){
+    avisoPico = document.createElement("div");
+    avisoPico.id = "avisoHorarioPico";
+    avisoPico.className = "badge-horario-pico";
+    const heroMeta = heroEl.querySelector(".hero-meta");
+    heroMeta.insertAdjacentElement("afterend", avisoPico);
+  }
+
+  avisoPico.innerHTML = `🔥 <b>Horário de pico</b> — estamos com bastante pedido agora, considere pedir com antecedência.`;
 }
 
 /* ============================================
