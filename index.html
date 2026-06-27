@@ -677,6 +677,43 @@ body{
 }
 .modal-item-obs::placeholder{ color: var(--cor-creme-fraco); opacity:0.7; }
 .modal-item-obs:focus{ border-color: var(--cor-brasa); }
+
+.modal-item-adicionais{
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--cor-card-borda);
+}
+.modal-item-adicionais-titulo{
+  font-size: 11.5px;
+  color: var(--cor-creme-fraco);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 6px;
+}
+.adicional-checkbox{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+  font-size: 13px;
+  color: var(--cor-creme);
+  cursor: pointer;
+}
+.adicional-checkbox input[type="checkbox"]{
+  width: 16px;
+  height: 16px;
+  accent-color: var(--cor-brasa);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.adicional-checkbox span:first-of-type{ flex: 1; }
+.adicional-preco{
+  color: var(--cor-dourado);
+  font-weight: 600;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
 .qtd-control-modal{
   display: flex;
   align-items: center;
@@ -1484,6 +1521,7 @@ function obterTelefoneLembrado(){
 
 let carrinho = {}; // { id: quantidade }
 let observacoes = {}; // { id: "texto da observação do item" }
+let adicionaisPorItem = {}; // { id: [idAdicional1, idAdicional2, ...] } — adicionais marcados por item do carrinho
 let etapaAtual = "carrinho"; // carrinho | entrega | pagamento
 let totalPedidosClienteAtual = 0; // quantos pedidos esse cliente já fez antes deste (0 = é o primeiro)
 
@@ -1502,7 +1540,7 @@ let pedido = {
 
 function salvarCarrinhoLocal(){
   try {
-    localStorage.setItem(CHAVE_STORAGE, JSON.stringify({ carrinho, observacoes, pedido, salvoEm: Date.now() }));
+    localStorage.setItem(CHAVE_STORAGE, JSON.stringify({ carrinho, observacoes, adicionaisPorItem, pedido, salvoEm: Date.now() }));
   } catch(e){
     console.warn("Não foi possível salvar o carrinho localmente.", e);
   }
@@ -1539,6 +1577,14 @@ function carregarCarrinhoLocal(){
     }
     observacoes = observacoesFiltradas;
 
+    const adicionaisFiltrados = {};
+    if(salvo.adicionaisPorItem){
+      Object.keys(salvo.adicionaisPorItem).forEach(id => {
+        if(carrinhoFiltrado[id]) adicionaisFiltrados[id] = salvo.adicionaisPorItem[id];
+      });
+    }
+    adicionaisPorItem = adicionaisFiltrados;
+
     if(salvo.pedido) pedido = Object.assign(pedido, salvo.pedido);
   } catch(e){
     console.warn("Não foi possível carregar o carrinho salvo.", e);
@@ -1560,11 +1606,37 @@ function buscarItem(id){
   }
 }
 
+function obterListaDeAdicionais(){
+  // Identifica a categoria de adicionais pelo nome de forma flexível
+  // (funciona com "Molhos e Adicionais", "Adicionais", "Adicional" etc —
+  // usa o radical "adicion" porque cobre singular e plural)
+  const categoriaAdicionais = cardapio.find(cat =>
+    cat.categoria.toLowerCase().includes("adicion")
+  );
+  if(!categoriaAdicionais) return [];
+  return categoriaAdicionais.itens.filter(item => item.disponivel !== false);
+}
+
+function buscarAdicional(id){
+  return obterListaDeAdicionais().find(a => a.id === id);
+}
+
+function calcularTotalAdicionaisDoItem(idItem){
+  const idsAdicionais = adicionaisPorItem[idItem] || [];
+  return idsAdicionais.reduce((total, idAdicional) => {
+    const adicional = buscarAdicional(idAdicional);
+    return total + (adicional ? adicional.preco : 0);
+  }, 0);
+}
+
 function calcularSubtotalItens(){
   let total = 0;
   for(const id in carrinho){
     const item = buscarItem(id);
-    if(item) total += item.preco * carrinho[id];
+    if(!item) continue;
+    const qtd = carrinho[id];
+    total += item.preco * qtd;
+    total += calcularTotalAdicionaisDoItem(id) * qtd;
   }
   return total;
 }
@@ -1723,6 +1795,7 @@ function remover(id){
 function removerItemTotalmente(id){
   delete carrinho[id];
   delete observacoes[id];
+  delete adicionaisPorItem[id];
   salvarCarrinhoLocal();
   renderizarControle(id);
   atualizarCarrinhoFlutuante();
@@ -1733,6 +1806,21 @@ function atualizarObservacaoItem(id, texto){
   if(texto && texto.trim()) observacoes[id] = texto.trim();
   else delete observacoes[id];
   salvarCarrinhoLocal();
+}
+
+function alternarAdicionalDoItem(idItem, idAdicional, marcado){
+  if(!adicionaisPorItem[idItem]) adicionaisPorItem[idItem] = [];
+
+  if(marcado){
+    if(!adicionaisPorItem[idItem].includes(idAdicional)) adicionaisPorItem[idItem].push(idAdicional);
+  } else {
+    adicionaisPorItem[idItem] = adicionaisPorItem[idItem].filter(id => id !== idAdicional);
+  }
+
+  if(adicionaisPorItem[idItem].length === 0) delete adicionaisPorItem[idItem];
+
+  salvarCarrinhoLocal();
+  renderizarEtapaCarrinho(); // re-renderiza pra atualizar os preços exibidos
 }
 
 function atualizarCarrinhoFlutuante(){
@@ -1767,6 +1855,9 @@ function renderizarEtapaCarrinho(){
   Object.keys(observacoes).forEach(id => {
     if(!carrinho[id]) delete observacoes[id];
   });
+  Object.keys(adicionaisPorItem).forEach(id => {
+    if(!carrinho[id]) delete adicionaisPorItem[id];
+  });
   salvarCarrinhoLocal();
 
   const ids = Object.keys(carrinho);
@@ -1774,15 +1865,21 @@ function renderizarEtapaCarrinho(){
   if(ids.length === 0){
     cont.innerHTML = `<div class="modal-vazio">Seu pedido está vazio.<br>Adicione itens do cardápio.</div>`;
   } else {
+    const listaAdicionais = obterListaDeAdicionais();
+
     cont.innerHTML = ids.map(id => {
       const item = buscarItem(id);
       const qtd = carrinho[id];
+      const precoUnitarioComAdicionais = item.preco + calcularTotalAdicionaisDoItem(id);
+      const adicionaisDesseItem = listaAdicionais.filter(a => a.id !== id); // não oferece o adicional pra ele mesmo
+      const idsMarcados = adicionaisPorItem[id] || [];
+
       return `
         <div class="modal-item">
           <div class="modal-item-linha">
             <div class="modal-item-info">
               <div class="modal-item-nome">${item.nome}</div>
-              <div class="modal-item-sub">${formatarPreco(item.preco)} cada</div>
+              <div class="modal-item-sub">${formatarPreco(precoUnitarioComAdicionais)} cada</div>
             </div>
             <div class="modal-item-controles">
               <div class="qtd-control qtd-control-modal">
@@ -1790,11 +1887,21 @@ function renderizarEtapaCarrinho(){
                 <span>${qtd}</span>
                 <button onclick="adicionar('${id}')">+</button>
               </div>
-              <div class="modal-item-preco">${formatarPreco(item.preco * qtd)}</div>
+              <div class="modal-item-preco">${formatarPreco(precoUnitarioComAdicionais * qtd)}</div>
               <button class="btn-remover-modal" onclick="removerItemTotalmente('${id}')" title="Remover item">🗑</button>
             </div>
           </div>
           <input type="text" class="modal-item-obs" placeholder="Ex: sem cebola, ponto da carne, etc." value="${(observacoes[id] || '').replace(/"/g, '&quot;')}" oninput="atualizarObservacaoItem('${id}', this.value)">
+          ${adicionaisDesseItem.length > 0 ? `
+          <div class="modal-item-adicionais">
+            <div class="modal-item-adicionais-titulo">Adicionar a este item:</div>
+            ${adicionaisDesseItem.map(ad => `
+              <label class="adicional-checkbox">
+                <input type="checkbox" ${idsMarcados.includes(ad.id) ? "checked" : ""} onchange="alternarAdicionalDoItem('${id}', '${ad.id}', this.checked)">
+                <span>${ad.nome}</span>
+                <span class="adicional-preco">+${formatarPreco(ad.preco)}</span>
+              </label>`).join("")}
+          </div>` : ""}
         </div>`;
     }).join("");
   }
@@ -2331,7 +2438,13 @@ function montarMensagemWhatsApp(){
     const item = buscarItem(id);
     if(!item) return;
     const qtd = carrinho[id];
-    msg += `• ${qtd}x ${item.nome} — ${formatarPreco(item.preco * qtd)}\n`;
+    const precoUnitarioComAdicionais = item.preco + calcularTotalAdicionaisDoItem(id);
+    msg += `• ${qtd}x ${item.nome} — ${formatarPreco(precoUnitarioComAdicionais * qtd)}\n`;
+    const idsAdicionaisMarcados = adicionaisPorItem[id] || [];
+    idsAdicionaisMarcados.forEach(idAd => {
+      const adicional = buscarAdicional(idAd);
+      if(adicional) msg += `   ↳ + ${adicional.nome} (${formatarPreco(adicional.preco)})\n`;
+    });
     if(observacoes[id]) msg += `   ↳ _${observacoes[id]}_\n`;
   });
   const temTaxaMsg = pedido.tipoEntrega === "entrega" && (pedido.taxaEntrega || 0) > 0;
@@ -2571,6 +2684,7 @@ function enviarPedidoWhatsApp(){
   limparCarrinhoLocal();
   carrinho = {};
   observacoes = {};
+  adicionaisPorItem = {};
   idsAntigos.forEach(id => renderizarControle(id));
   atualizarCarrinhoFlutuante();
   fecharModalCarrinho();
@@ -2583,7 +2697,19 @@ async function registrarPedido(){
     const itensDoPedido = Object.keys(carrinho).map(id => {
       const item = buscarItem(id);
       if(!item) return null;
-      return { id, nome: item.nome, quantidade: carrinho[id], preco_unitario: item.preco, observacao: observacoes[id] || "" };
+      const idsAdicionaisMarcados = adicionaisPorItem[id] || [];
+      const adicionaisDoItem = idsAdicionaisMarcados
+        .map(idAd => buscarAdicional(idAd))
+        .filter(Boolean)
+        .map(ad => ({ nome: ad.nome, preco: ad.preco }));
+      return {
+        id,
+        nome: item.nome,
+        quantidade: carrinho[id],
+        preco_unitario: item.preco,
+        observacao: observacoes[id] || "",
+        adicionais: adicionaisDoItem
+      };
     }).filter(Boolean);
 
     if(itensDoPedido.length === 0) return null;
@@ -2596,7 +2722,7 @@ async function registrarPedido(){
       forma_pagamento: pedido.dividirPagamento ? "dividido" : pedido.formaPagamento,
       total: calcularTotal(),
       taxa_entrega: pedido.tipoEntrega === "entrega" ? (pedido.taxaEntrega || 0) : 0,
-      itens: itensDoPedido.map(i => ({ nome: i.nome, quantidade: i.quantidade, preco_unitario: i.preco_unitario, observacao: i.observacao })),
+      itens: itensDoPedido.map(i => ({ nome: i.nome, quantidade: i.quantidade, preco_unitario: i.preco_unitario, observacao: i.observacao, adicionais: i.adicionais })),
       observacao: pedido.observacao || "",
       pix_confirmado: pedido.formaPagamento === "pix" ? pixPago : false,
     }).select().single();
