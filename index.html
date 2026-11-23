@@ -1606,6 +1606,17 @@ function buscarItem(id){
   }
 }
 
+// Sugestão de observação de acordo com a categoria do item
+function placeholderObservacao(id){
+  const cat = cardapio.find(c => c.itens.some(i => i.id === id));
+  const nome = (cat ? cat.categoria : "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  if(/bebida|suco|refri|drink/.test(nome)) return "Ex: bem gelado, sem gelo, sem açúcar...";
+  if(/sopa|caldo/.test(nome))             return "Ex: sem pimenta, bem quente...";
+  if(/acompanh|porc/.test(nome))          return "Ex: sem sal, porção bem servida...";
+  if(/sobremesa|doce/.test(nome))         return "Ex: sem calda, colher extra...";
+  return "Ex: sem cebola, sem pimenta, etc.";
+}
+
 function obterListaDeAdicionais(){
   // Identifica a categoria de adicionais pelo nome de forma flexível
   // (funciona com "Molhos e Adicionais", "Adicionais", "Adicional" etc —
@@ -1891,7 +1902,7 @@ function renderizarEtapaCarrinho(){
               <button class="btn-remover-modal" onclick="removerItemTotalmente('${id}')" title="Remover item">🗑</button>
             </div>
           </div>
-          <input type="text" class="modal-item-obs" placeholder="Ex: sem cebola, ponto da carne, etc." value="${(observacoes[id] || '').replace(/"/g, '&quot;')}" oninput="atualizarObservacaoItem('${id}', this.value)">
+          <input type="text" class="modal-item-obs" placeholder="${placeholderObservacao(id)}" value="${(observacoes[id] || '').replace(/"/g, '&quot;')}" oninput="atualizarObservacaoItem('${id}', this.value)">
           ${adicionaisDesseItem.length > 0 ? `
           <div class="modal-item-adicionais">
             <div class="modal-item-adicionais-titulo">Adicionar a este item:</div>
