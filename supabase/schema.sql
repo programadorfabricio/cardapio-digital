@@ -191,10 +191,10 @@ create policy "fotos troca" on storage.objects for update to anon, authenticated
 
 -- ---------------------------------------------------------------------
 -- Loja de demonstração (é a que abre quando o link não tem ?loja=)
--- TROQUE a senha e o WhatsApp antes de rodar.
+-- TROQUE 55DDDNUMERO pelo WhatsApp que recebe os pedidos (só números). Senha do painel: 1234
 -- ---------------------------------------------------------------------
 insert into lojas_config (slug_loja, nome_loja, senha_painel, numero_whatsapp)
-values ('brasa-cia', 'FH Cardápio — Demonstração', 'TROCAR_SENHA', '5519999999999')
+values ('brasa-cia', 'FH Cardápio — Demonstração', '1234', '55DDDNUMERO')
 on conflict (slug_loja) do nothing;
 
 with cats as (
@@ -226,3 +226,20 @@ insert into cardapio_bairros (slug_loja, nome, taxa_entrega, ordem) values
   ('brasa-cia', 'Centro', 5.00, 1),
   ('brasa-cia', 'Cambuí', 7.00, 2),
   ('brasa-cia', 'Taquaral', 8.00, 3);
+
+-- Fotos da demonstração (Unsplash, uso gratuito)
+update cardapio_itens as i
+set imagem_url = 'https://images.unsplash.com/' || f.foto || '?w=600&h=600&fit=crop&auto=format&q=70'
+from (values
+  ('Frango grelhado com legumes', 'photo-1762631934518-f75e233413ca'),
+  ('Carne de panela', 'photo-1519699788450-ad34386a3bfc'),
+  ('Strogonoff de frango', 'photo-1644592219048-5c070fd3c91c'),
+  ('Escondidinho de carne seca', 'photo-1777199311086-ec5ff230aefd'),
+  ('Arroz integral', 'photo-1502472231352-10142bacaba2'),
+  ('Legumes no vapor', 'photo-1578071768923-b3d68573028e'),
+  ('Caldo verde', 'photo-1594756202469-9ff9799b2e4e'),
+  ('Sopa de legumes com frango', 'photo-1512003867696-6d5ce6835040'),
+  ('Suco natural de laranja', 'photo-1600271886742-f049cd451bba'),
+  ('Água mineral', 'photo-1616118132534-381148898bb4')
+) as f(nome, foto)
+where i.nome = f.nome and i.slug_loja = 'brasa-cia';
