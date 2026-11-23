@@ -965,6 +965,7 @@ body{
 }
 .btn-continuar:hover{ background: var(--cor-brasa-clara); }
 .btn-continuar:disabled{ background:#444; cursor:not-allowed; }
+.aviso-pendencias{ display:none; font-size:13px; color: var(--cor-brasa-clara); margin:0 0 10px; text-align:center; }
 
 .resumo-linha{
   display:flex;
@@ -1533,6 +1534,7 @@ let pedido = {
   taxaEntrega: 0,         // preenchido automaticamente conforme o bairro escolhido
   formaPagamento: null,   // "pix" | "dinheiro" | "debito" | "credito" | "vale"
   trocoPara: "",
+  precisaTroco: null,     // null = ainda não respondeu | true | false
   dividirPagamento: false,
   divisao: [],            // [{ forma: "dinheiro", valor: 10 }, ...]
   observacao: ""
@@ -2057,8 +2059,11 @@ function renderizarEtapaEntrega(){
   }
 
   const footer = document.getElementById("modalFooter");
-  footer.innerHTML = `<button class="btn-continuar" id="btnIrPagamento">Continuar</button>`;
-  document.getElementById("btnIrPagamento").onclick = () => irPara("pagamento");
+  footer.innerHTML = `<div class="aviso-pendencias" id="avisoEntrega"></div><button class="btn-continuar" id="btnIrPagamento">Continuar</button>`;
+  document.getElementById("btnIrPagamento").onclick = () => {
+    if(pendenciasEntrega().length) return atualizarBotaoEntrega();
+    irPara("pagamento");
+  };
   atualizarBotaoEntrega();
 }
 
@@ -2264,15 +2269,63 @@ function encontrarItemPorNome(nome){
 document.getElementById("fecharModalMeusPedidos").onclick = fecharModalMeusPedidos;
 document.getElementById("btnAbrirMeusPedidos").onclick = () => abrirMeusPedidos(pedido.telefone || "");
 
+/* ===== VALIDAÇÃO (campos obrigatórios) ===== */
+const DDDS_VALIDOS = [11,12,13,14,15,16,17,18,19,21,22,24,27,28,31,32,33,34,35,37,38,41,42,43,44,45,46,47,48,49,51,53,54,55,61,62,63,64,65,66,67,68,69,71,73,74,75,77,79,81,82,83,84,85,86,87,88,89,91,92,93,94,95,96,97,98,99];
+
+function telefoneValido(telefone){
+  let n = (telefone || "").replace(/\D/g, "");
+  if((n.length === 12 || n.length === 13) && n.startsWith("55")) n = n.slice(2);
+  if(n.length !== 10 && n.length !== 11) return false;
+  if(!DDDS_VALIDOS.includes(parseInt(n.slice(0, 2), 10))) return false;
+  if(n.length === 11 && n[2] !== "9") return false;   // celular sempre começa com 9
+  if(/^(\d)\1+$/.test(n.slice(2))) return false;     // 99999-9999, 11111-1111 etc.
+  return true;
+}
+
+function pendenciasEntrega(){
+  const p = [];
+  if(!telefoneValido(pedido.telefone)) p.push("telefone com DDD");
+  if((pedido.nome || "").trim().length < 2) p.push("seu nome");
+  if(!pedido.tipoEntrega) p.push("entrega ou retirada");
+  if(pedido.tipoEntrega === "entrega"){
+    if(!pedido.endereco.rua.trim()) p.push("rua");
+    if(!pedido.endereco.numero.trim()) p.push("número");
+    if(!pedido.endereco.bairro.trim()) p.push("bairro");
+  }
+  return p;
+}
+
+function pendenciasPagamento(){
+  const p = [];
+  const total = calcularTotal();
+  if(!pedido.dividirPagamento){
+    if(!pedido.formaPagamento) p.push("a forma de pagamento");
+    if(pedido.formaPagamento === "dinheiro"){
+      if(pedido.precisaTroco === null || pedido.precisaTroco === undefined) p.push("se precisa de troco");
+      else if(pedido.precisaTroco === true && !(parseFloat(pedido.trocoPara) > total)) p.push(`troco para um valor acima de ${formatarPreco(total)}`);
+    }
+    if(pedido.formaPagamento === "pix" && pixPago !== true) p.push("o pagamento do Pix");
+  } else {
+    const soma = pedido.divisao.reduce((acc, d) => acc + (parseFloat(d.valor) || 0), 0);
+    if(!pedido.divisao.every(d => d.forma)) p.push("as duas formas de pagamento");
+    if(Math.abs(total - soma) >= 0.01) p.push("valores que somem o total");
+  }
+  return p;
+}
+
+function mostrarPendencias(idAviso, pendencias){
+  const el = document.getElementById(idAviso);
+  if(!el) return;
+  el.textContent = pendencias.length ? "Falta preencher: " + pendencias.join(", ") : "";
+  el.style.display = pendencias.length ? "block" : "none";
+}
+
 function atualizarBotaoEntrega(){
   const btn = document.getElementById("btnIrPagamento");
   if(!btn) return;
-  const telefoneNumeros = (pedido.telefone || "").replace(/\D/g, "");
-  let valido = !!pedido.nome.trim() && !!pedido.tipoEntrega && telefoneNumeros.length >= 10;
-  if(valido && pedido.tipoEntrega === "entrega"){
-    valido = pedido.endereco.rua.trim() && pedido.endereco.numero.trim() && pedido.endereco.bairro.trim();
-  }
-  btn.disabled = !valido;
+  const pendencias = pendenciasEntrega();
+  btn.disabled = pendencias.length > 0;
+  mostrarPendencias("avisoEntrega", pendencias);
 }
 
 /* ===== ETAPA 3: PAGAMENTO ===== */
@@ -2334,10 +2387,28 @@ function renderizarEtapaPagamento(){
     if(pedido.formaPagamento === "dinheiro"){
       campoExtra.innerHTML = `
         <div class="campo-grupo">
-          <label class="campo-label">Precisa de troco para quanto? (deixe vazio se for valor exato)</label>
-          <input class="campo-input" id="inputTroco" type="number" step="0.01" placeholder="Ex: 50,00" value="${pedido.trocoPara}">
-        </div>`;
-      document.getElementById("inputTroco").oninput = (e) => { pedido.trocoPara = e.target.value; salvarCarrinhoLocal(); };
+          <label class="campo-label">Precisa de troco? *</label>
+          <div class="opcoes-grid">
+            <div class="opcao-card ${pedido.precisaTroco === false ? 'selecionado' : ''}" data-troco="nao">Não, valor exato</div>
+            <div class="opcao-card ${pedido.precisaTroco === true ? 'selecionado' : ''}" data-troco="sim">Sim</div>
+          </div>
+        </div>
+        ${pedido.precisaTroco === true ? `
+        <div class="campo-grupo">
+          <label class="campo-label">Troco para quanto? *</label>
+          <input class="campo-input" id="inputTroco" type="number" step="0.01" min="0" placeholder="Ex: 50,00" value="${pedido.trocoPara}">
+        </div>` : ""}`;
+      campoExtra.querySelectorAll("[data-troco]").forEach(op => {
+        op.onclick = () => {
+          pedido.precisaTroco = op.dataset.troco === "sim";
+          if(!pedido.precisaTroco) pedido.trocoPara = "";
+          renderizarEtapaPagamento();
+          salvarCarrinhoLocal();
+          if(pedido.precisaTroco) setTimeout(() => document.getElementById("inputTroco")?.focus(), 50);
+        };
+      });
+      const inputTroco = document.getElementById("inputTroco");
+      if(inputTroco) inputTroco.oninput = (e) => { pedido.trocoPara = e.target.value; atualizarBotaoFinalizar(); salvarCarrinhoLocal(); };
     } else if(pedido.formaPagamento === "pix"){
       campoExtra.innerHTML = `<div id="pixDinamico" class="pix-dinamico"></div>`;
       setTimeout(() => {
@@ -2393,6 +2464,7 @@ function renderizarEtapaPagamento(){
       <span>Total do pedido</span>
       <b>${formatarPreco(total)}</b>
     </div>
+    <div class="aviso-pendencias" id="avisoPagamento"></div>
     <button class="btn-finalizar" id="btnFinalizar">📲 Enviar pedido pelo WhatsApp</button>`;
   document.getElementById("inputObservacao").oninput = (e) => { pedido.observacao = e.target.value; salvarCarrinhoLocal(); };
   document.getElementById("btnFinalizar").onclick = enviarPedidoWhatsApp;
@@ -2421,19 +2493,10 @@ function atualizarResumoDivisao(){
 function atualizarBotaoFinalizar(){
   const btn = document.getElementById("btnFinalizar");
   if(!btn) return;
-  let valido = false;
-  if(!pedido.dividirPagamento){
-    valido = !!pedido.formaPagamento;
-    if(valido && pedido.formaPagamento === "pix"){
-      valido = pixPago === true; // só libera enviar depois da confirmação automática
-    }
-  } else {
-    const total = calcularTotal();
-    const soma = pedido.divisao.reduce((acc, d) => acc + (parseFloat(d.valor) || 0), 0);
-    const formasOk = pedido.divisao.every(d => d.forma);
-    valido = formasOk && Math.abs(total - soma) < 0.01;
-  }
-  btn.disabled = !valido;
+  // Pix só libera depois da confirmação automática (está dentro de pendenciasPagamento)
+  const pendencias = pendenciasPagamento();
+  btn.disabled = pendencias.length > 0;
+  mostrarPendencias("avisoPagamento", pendencias);
 }
 
 /* ===== MONTAGEM DA MENSAGEM FINAL ===== */
@@ -2475,8 +2538,10 @@ function montarMensagemWhatsApp(){
   msg += `\n\n💰 *Pagamento*\n`;
   if(!pedido.dividirPagamento){
     msg += textoFormaPagamento(pedido.formaPagamento);
-    if(pedido.formaPagamento === "dinheiro" && pedido.trocoPara){
-      msg += ` — troco para ${formatarPreco(parseFloat(pedido.trocoPara))}`;
+    if(pedido.formaPagamento === "dinheiro"){
+      msg += pedido.precisaTroco && pedido.trocoPara
+        ? ` — troco para ${formatarPreco(parseFloat(pedido.trocoPara))}`
+        : ` — não precisa de troco`;
     }
     if(pedido.formaPagamento === "pix" && pixPago){
       msg += ` ✅ (pagamento confirmado automaticamente)`;
@@ -2677,6 +2742,17 @@ function mostrarErroPix(mensagem){
 
 function enviarPedidoWhatsApp(){
   if(totalItens() === 0) return;
+  // Confere tudo de novo na hora de enviar (evita pedido sem telefone/endereço/troco)
+  const faltaEntrega = pendenciasEntrega();
+  if(faltaEntrega.length){
+    alert("Falta preencher: " + faltaEntrega.join(", "));
+    return irPara("entrega");
+  }
+  const faltaPagamento = pendenciasPagamento();
+  if(faltaPagamento.length){
+    alert("Falta preencher: " + faltaPagamento.join(", "));
+    return atualizarBotaoFinalizar();
+  }
   if(!lojaEstaAberta()){
     alert(mensagemLojaFechada());
     return;
