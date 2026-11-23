@@ -7,7 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="preconnect" href="https://jclcbajnhbabwmkhmman.supabase.co" crossorigin>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.2/dist/umd/supabase.js"></script>
 <style>
 
 /* ============================================
@@ -965,6 +966,7 @@ body{
 }
 .btn-continuar:hover{ background: var(--cor-brasa-clara); }
 .btn-continuar:disabled{ background:#444; cursor:not-allowed; }
+.carregando-cardapio{ text-align:center; padding:60px 20px; opacity:.7; font-weight:600; }
 .aviso-pendencias{ display:none; font-size:13px; color: var(--cor-brasa-clara); margin:0 0 10px; text-align:center; }
 
 .resumo-linha{
@@ -2919,25 +2921,40 @@ document.getElementById("btnLimparBusca").onclick = () => {
 /* ============================================
    CARREGAMENTO DE DADOS (Supabase com fallback pros dados fixos acima)
    ============================================ */
-async function carregarDadosDaLoja(){
-  if(!supabaseClient) return; // sem configuração — usa os dados fixos já definidos
+const CHAVE_CACHE_LOJA = "fhcardapio_cache_" + SLUG_LOJA;
 
-  try {
-    const { data: config, error: errConfig } = await supabaseClient
-      .from("lojas_config")
-      .select("*")
-      .eq("slug_loja", SLUG_LOJA)
-      .maybeSingle();
+// Busca tudo do banco AO MESMO TEMPO (antes era uma consulta depois da outra)
+async function buscarDadosDaLoja(){
+  const [rConfig, rCategorias, rItens, rIngredientes, rVinculos, rBairros] = await Promise.all([
+    supabaseClient.from("lojas_config")
+      .select("numero_whatsapp, horario_abertura, horario_fechamento, aberto_manual, tempo_estimado_min, tempo_estimado_max, dias_funcionamento")
+      .eq("slug_loja", SLUG_LOJA).maybeSingle(),
+    supabaseClient.from("cardapio_categorias").select("*").eq("slug_loja", SLUG_LOJA).order("ordem", { ascending: true }),
+    supabaseClient.from("cardapio_itens").select("*").eq("slug_loja", SLUG_LOJA).order("ordem", { ascending: true }),
+    supabaseClient.from("cardapio_ingredientes").select("*").eq("slug_loja", SLUG_LOJA),
+    supabaseClient.from("cardapio_item_ingredientes")
+      .select("item_id, ingrediente_id, quantidade_usada, cardapio_ingredientes!inner(slug_loja)")
+      .eq("cardapio_ingredientes.slug_loja", SLUG_LOJA),
+    supabaseClient.from("cardapio_bairros").select("*").eq("slug_loja", SLUG_LOJA).order("ordem", { ascending: true })
+  ]);
+  if(rConfig.error) throw rConfig.error;
+  if(rCategorias.error) throw rCategorias.error;
+  if(rItens.error) throw rItens.error;
+  return {
+    config: rConfig.data,
+    categorias: rCategorias.data,
+    itens: rItens.data,
+    ingredientes: rIngredientes.data || [],
+    vinculos: rVinculos.data || [],
+    bairros: rBairros.error ? null : rBairros.data
+  };
+}
 
-    if(errConfig) throw errConfig;
-
-    // Se a URL pediu uma loja específica e ela não existe no banco, mostra erro claro
-    // em vez de silenciosamente cair nos dados fixos (que seriam de outro cliente)
-    const slugVeioDaUrl = new URLSearchParams(window.location.search).get("loja");
-    if(slugVeioDaUrl && !config){
-      mostrarErroLojaNaoEncontrada(slugVeioDaUrl);
-      throw new Error("Loja não encontrada: " + slugVeioDaUrl);
-    }
+// Aplica os dados (vindos do banco ou do cache do celular) no cardápio
+function aplicarDadosDaLoja(dados){
+  const { config, categorias, itens } = dados;
+  const ingredientesData = dados.ingredientes;
+  const vinculosData = dados.vinculos;
 
     if(config){
       NUMERO_WHATSAPP = config.numero_whatsapp || NUMERO_WHATSAPP;
@@ -2949,40 +2966,6 @@ async function carregarDadosDaLoja(){
       if(Array.isArray(config.dias_funcionamento) && config.dias_funcionamento.length > 0){
         DIAS_FUNCIONAMENTO = config.dias_funcionamento;
       }
-    }
-
-    const { data: categorias, error: errCategorias } = await supabaseClient
-      .from("cardapio_categorias")
-      .select("*")
-      .eq("slug_loja", SLUG_LOJA)
-      .order("ordem", { ascending: true });
-
-    if(errCategorias) throw errCategorias;
-
-    const { data: itens, error: errItens } = await supabaseClient
-      .from("cardapio_itens")
-      .select("*")
-      .eq("slug_loja", SLUG_LOJA)
-      .order("ordem", { ascending: true });
-
-    if(errItens) throw errItens;
-
-    // Busca ingredientes e os vínculos item <-> ingrediente, pra calcular
-    // se algum item ficou esgotado por falta de ingrediente compartilhado
-    // (ex: acabou o pão -> todos os burgers ficam indisponíveis)
-    const { data: ingredientesData } = await supabaseClient
-      .from("cardapio_ingredientes")
-      .select("*")
-      .eq("slug_loja", SLUG_LOJA);
-
-    const idsItensDaLoja = (itens || []).map(i => i.id);
-    let vinculosData = [];
-    if(idsItensDaLoja.length > 0){
-      const { data: vinculos } = await supabaseClient
-        .from("cardapio_item_ingredientes")
-        .select("*")
-        .in("item_id", idsItensDaLoja);
-      vinculosData = vinculos || [];
     }
 
     const ingredientesPorId = {};
@@ -3031,15 +3014,39 @@ async function carregarDadosDaLoja(){
       if(novoCardapio.length > 0) cardapio = novoCardapio;
     }
 
-    const { data: bairros, error: errBairros } = await supabaseClient
-      .from("cardapio_bairros")
-      .select("*")
-      .eq("slug_loja", SLUG_LOJA)
-      .order("ordem", { ascending: true });
+  if(dados.bairros){
+    BAIRROS_ENTREGA = dados.bairros.map(b => ({ id: b.id, nome: b.nome, taxa: parseFloat(b.taxa_entrega) || 0 }));
+  }
+}
 
-    if(!errBairros && bairros){
-      BAIRROS_ENTREGA = bairros.map(b => ({ id: b.id, nome: b.nome, taxa: parseFloat(b.taxa_entrega) || 0 }));
+function lerCacheLoja(){
+  try {
+    const bruto = localStorage.getItem(CHAVE_CACHE_LOJA);
+    return bruto ? JSON.parse(bruto) : null;
+  } catch(e){ return null; }
+}
+
+function salvarCacheLoja(dados){
+  try { localStorage.setItem(CHAVE_CACHE_LOJA, JSON.stringify(dados)); } catch(e){}
+}
+
+async function carregarDadosDaLoja(){
+  if(!supabaseClient) return; // sem configuração — usa os dados fixos já definidos
+
+  try {
+    const dados = await buscarDadosDaLoja();
+
+    // Se a URL pediu uma loja específica e ela não existe no banco, mostra erro claro
+    // em vez de silenciosamente cair nos dados fixos (que seriam de outro cliente)
+    const slugVeioDaUrl = new URLSearchParams(window.location.search).get("loja");
+    if(slugVeioDaUrl && !dados.config){
+      localStorage.removeItem(CHAVE_CACHE_LOJA);
+      mostrarErroLojaNaoEncontrada(slugVeioDaUrl);
+      throw new Error("Loja não encontrada: " + slugVeioDaUrl);
     }
+
+    aplicarDadosDaLoja(dados);
+    salvarCacheLoja(dados);
   } catch(e){
     console.warn("Falha ao buscar dados do Supabase, usando dados fixos como fallback.", e);
   }
@@ -3336,18 +3343,29 @@ function mostrarErroLojaNaoEncontrada(slug){
 }
 
 async function iniciar(){
-  // Renderiza imediatamente com os dados fixos (fallback), pra nunca mostrar tela vazia
-  renderizarCardapio();
-  carregarCarrinhoLocal();
-  Object.keys(carrinho).forEach(id => renderizarControle(id));
-  atualizarCarrinhoFlutuante();
-  aplicarEstadoAberto();
+  // 1) Mostra NA HORA o último cardápio salvo neste celular (abre instantâneo)
+  const cache = supabaseClient ? lerCacheLoja() : null;
+  if(cache){
+    try { aplicarDadosDaLoja(cache); } catch(e){ console.warn("Cache inválido", e); }
+  }
 
-  // Busca os dados reais do Supabase em segundo plano e atualiza a tela quando chegar
+  if(cache || !supabaseClient){
+    renderizarCardapio();
+    carregarCarrinhoLocal();
+    Object.keys(carrinho).forEach(id => renderizarControle(id));
+    atualizarCarrinhoFlutuante();
+    aplicarEstadoAberto();
+  } else {
+    // Primeira visita: não mostra o cardápio de exemplo, só um aviso rápido
+    document.getElementById("categorias").innerHTML = `<div class="carregando-cardapio">Carregando cardápio...</div>`;
+  }
+
+  // 2) Busca os dados atualizados do banco e atualiza a tela
   await carregarDadosDaLoja();
   if(lojaInvalida) return; // já mostrou a tela de erro, não sobrescreve
 
   renderizarCardapio();
+  if(!cache && supabaseClient) carregarCarrinhoLocal();
   Object.keys(carrinho).forEach(id => renderizarControle(id));
   atualizarCarrinhoFlutuante();
   aplicarEstadoAberto();

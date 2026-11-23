@@ -7,7 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="preconnect" href="https://jclcbajnhbabwmkhmman.supabase.co" crossorigin>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.2/dist/umd/supabase.js"></script>
 <style>
 
 :root{
@@ -1593,10 +1594,29 @@ function criarCardItem(item){
   return card;
 }
 
+// Reduz a foto antes de enviar (celular tira foto de 3-5MB; no cardápio basta ~100KB)
+function comprimirFoto(arquivo, ladoMaximo = 900, qualidade = 0.8){
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(arquivo);
+    const img = new Image();
+    img.onload = () => {
+      const escala = Math.min(1, ladoMaximo / Math.max(img.width, img.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(img.width * escala);
+      canvas.height = Math.round(img.height * escala);
+      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      canvas.toBlob(blob => resolve(blob && blob.size < arquivo.size ? blob : arquivo), "image/jpeg", qualidade);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(arquivo); }; // se não der, envia a original
+    img.src = url;
+  });
+}
+
 async function fazerUploadFoto(card, arquivo){
-  const TAMANHO_MAXIMO = 5 * 1024 * 1024; // 5MB
+  const TAMANHO_MAXIMO = 15 * 1024 * 1024; // 15MB (a foto é reduzida antes de enviar)
   if(arquivo.size > TAMANHO_MAXIMO){
-    mostrarStatus("Foto muito grande. Escolha uma imagem de até 5MB.", "erro");
+    mostrarStatus("Foto muito grande. Escolha uma imagem de até 15MB.", "erro");
     return;
   }
   if(!arquivo.type.startsWith("image/")){
@@ -1611,13 +1631,15 @@ async function fazerUploadFoto(card, arquivo){
   statusEl.textContent = "";
 
   try {
-    const extensao = arquivo.name.split(".").pop().toLowerCase();
+    const fotoFinal = await comprimirFoto(arquivo);
+    const extensao = fotoFinal === arquivo ? arquivo.name.split(".").pop().toLowerCase() : "jpg";
     const nomeArquivo = `${SLUG_LOJA}/${card.dataset.id || "novo"}-${Date.now()}.${extensao}`;
 
+    // Nome do arquivo é sempre novo, então o navegador pode guardar a foto por 1 ano
     const { error: erroUpload } = await supabaseClient
       .storage
       .from("cardapio-fotos")
-      .upload(nomeArquivo, arquivo, { cacheControl: "3600", upsert: true });
+      .upload(nomeArquivo, fotoFinal, { cacheControl: "31536000", upsert: true, contentType: fotoFinal.type || "image/jpeg" });
 
     if(erroUpload) throw erroUpload;
 
